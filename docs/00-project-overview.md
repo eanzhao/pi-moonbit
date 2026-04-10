@@ -48,17 +48,25 @@ pi-mono 是 Mario Zechner（libGDX 作者）开源的 AI 智能体工具包，Ty
   mom          → ai, agent, coding-agent
 ```
 
-完整依赖图：
+完整依赖图（箭头表示"被依赖"方向）：
 
 ```
-ai ─────────────┬──→ agent ──┬──→ coding-agent ──→ mom
-                │            │        ↑
-tui ────────────┼────────────┼────────┘
-                │            │
-                ├──→ web-ui  └──→ pods
-                │     ↑
-                └─────┘
+ai ──→ agent ──→ coding-agent ──→ mom
+│        │            ↑
+│        └──→ pods    │
+│                     │
+└──→ web-ui           │
+       ↑              │
+tui ───┴──────────────┘
 ```
+
+读法：`ai → agent` 表示 agent 依赖 ai。
+- ai, tui：无内部依赖（叶子）
+- agent：依赖 ai
+- pods：依赖 agent
+- web-ui：依赖 ai, tui
+- coding-agent：依赖 ai, agent, tui
+- mom：依赖 ai, agent, coding-agent
 
 ## MoonBit 重新实现方案
 
@@ -73,7 +81,7 @@ eanzhao/pi-moonbit
 │   ├── tui/             ← pi-tui: 终端 UI 库
 │   ├── web_ui/          ← pi-web-ui: Web UI 组件
 │   ├── mom/             ← pi-mom: Slack 集成
-│   └── pods/            ← pi-pods: GPU Pod 管理
+│   └── pods/            ← pi (@mariozechner/pi): GPU Pod 管理
 └── src/
     └── main/            ← CLI 入口
 ```
@@ -198,11 +206,11 @@ pub(open) trait Extension {
 |------|------|
 | 00 | 项目总览（本文） |
 | 01 | LLM API 层：消息、模型、Provider |
-| 02 | Agent 引擎：循环、工具、事件 |
-| 03 | 终端 UI：组件、渲染、键盘 |
-| 04 | 编码智能体：工具、会话、扩展 |
+| 02 | 终端 UI：组件、渲染、键盘（与 01 无依赖，可并行） |
+| 03 | Agent 引擎：循环、工具、事件（依赖 01） |
+| 04 | 编码智能体：工具、会话、扩展（依赖 01 + 02 + 03） |
 | 05 | CLI 入口与集成 |
-| 06+ | Web UI / Slack / Pods |
+| 06+ | Web UI / Pods / Slack |
 
 每篇文档包含：
 - 对应 pi-mono 包的架构分析
