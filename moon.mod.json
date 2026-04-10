@@ -1,0 +1,8 @@
+{
+  "name": "eanzhao/pi-moonbit",
+  "version": "0.1.0",
+  "readme": "README.md",
+  "license": "MIT",
+  "keywords": ["ai", "agent", "llm", "coding-agent"],
+  "description": "MoonBit reimplementation of pi-mono: AI agent toolkit with unified LLM API, agent runtime, TUI, and coding agent CLI"
+}
