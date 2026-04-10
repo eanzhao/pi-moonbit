@@ -37,8 +37,10 @@ pi-moonbit/
 
 - Package names use `snake_case` (e.g., `coding_agent`, `web_ui`)
 - Types use `PascalCase`, functions/methods use `snake_case`
-- Use `enum` (ADT) for discriminated unions (Message, Event, etc.)
-- Use `trait` for abstraction points (Provider, Tool, Component)
+- Use `struct` for data-only types (options, config, results)
+- Use `enum` (ADT) for closed discriminated unions (Message, Event, StopReason)
+- Use `trait` (or `pub(open) trait`) for behavioral abstractions (Provider, Component)
+- Use newtype wrappers (e.g., `type ApiId String`) for open/extensible identifiers
 - Use `Result[T, E]` and `!` syntax for error handling
 - Prefer pattern matching over if/else chains
 - Write tests in `*_test.mbt` files using `test` blocks
@@ -47,7 +49,8 @@ pi-moonbit/
 
 - Each implementation phase = one numbered doc + one commit
 - Docs live in `docs/` with `NN-topic.md` naming
-- Implementation order follows dependency graph: ai → agent → tui → coding_agent → main
+- Implementation order follows dependency graph: ai, tui (parallel) → agent → coding_agent → main
+- Package config uses `moon.pkg` format (not `moon.pkg.json`)
 - Reference the TypeScript source in `pi-mono/packages/` when implementing
 
 ### Commit Messages
@@ -62,25 +65,29 @@ feat(agent): implement agent loop with tool calling
 
 ## Key Design Decisions
 
-- **TypeScript interfaces → MoonBit traits**: Provider, Tool, Component
-- **TypeScript union types → MoonBit enum (ADT)**: Message, Event, StopReason
+- **Data interfaces → `struct`**: StreamOptions, Tool (schema), Context, ThinkingBudgets
+- **Behavioral interfaces → `trait`**: Provider (`stream()`), Component (`render()`), Extension
+- **Closed union types → `enum` (ADT)**: Message, AssistantMessageEvent, StopReason
+- **Open union types → newtype `String` + registry**: Api, Provider identifiers
+- **Declaration merging → registry pattern**: CustomAgentMessages uses a deserializer map
 - **TypeScript generics → MoonBit generics with trait bounds**
 - **npm workspaces → MoonBit single-module multi-package**
-- **async/await → MoonBit Async or callback-based patterns**
+- **async/await + AsyncIterable → `async fn` (Native) or callbacks (fallback)**
 - **JSON serialization → `@json` library**
-- **Target**: WASM (primary) and Native
+- **Target**: Native (primary), WASM (for web_ui only)
 
 ## Reference: pi-mono Architecture
 
-The original pi-mono has 7 packages with this dependency graph:
+The original pi-mono has 7 packages with this dependency graph (from package.json):
 
 ```
-ai (LLM API)  ←  agent (loop)  ←  coding-agent (CLI)  ←  mom (Slack)
-                                        ↑
-tui (terminal UI) ─────────────────────┘
-
-web-ui (browser)  ←  ai, agent
-pods (GPU)        ←  ai, agent
+叶子:  ai          tui          (无内部依赖)
+       ↓            ↓
+中间:  agent→ai    web-ui→ai,tui   pods→agent
+       ↓
+上层:  coding-agent → ai, agent, tui
+       ↓
+       mom → ai, agent, coding-agent
 ```
 
 Key abstractions to port:

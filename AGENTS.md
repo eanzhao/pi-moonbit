@@ -30,15 +30,18 @@ moon test lib/ai    # Run tests for a specific package
 
 ### Implementation Rules
 
-1. **Follow the dependency order**: ai → agent → tui → coding_agent → main
+1. **Follow the dependency order**: ai, tui (parallel leaves) → agent → coding_agent → main
 2. **One doc + one commit per phase**: each phase adds a `docs/NN-*.md` and the implementation
 3. **MoonBit idioms over TypeScript transliteration**:
-   - Use `enum` (algebraic data types) for tagged unions
-   - Use `trait` for interfaces / polymorphism
+   - Use `struct` for data-only types (options, config, results)
+   - Use `enum` (ADT) for closed discriminated unions (Message, Event, StopReason)
+   - Use `trait` / `pub(open) trait` for behavioral abstractions (Provider, Component)
+   - Use newtype wrappers (`type ApiId String`) for open/extensible identifiers
    - Use `Result[T, E]` for error handling
    - Use pattern matching
 4. **Tests**: every package should have `*_test.mbt` files with `test` blocks
 5. **Do not modify** anything under `pi-mono/` — it is the read-only reference
+6. **Target**: Native (primary), WASM only for web_ui
 
 ### Package Structure
 
@@ -46,7 +49,7 @@ Each package under `lib/` follows this layout:
 
 ```
 lib/ai/
-├── moon.pkg.json     # Package manifest (dependencies, etc.)
+├── moon.pkg          # Package manifest (dependencies, etc.)
 ├── types.mbt         # Core type definitions
 ├── provider.mbt      # Provider trait and implementations
 ├── stream.mbt        # Streaming API
