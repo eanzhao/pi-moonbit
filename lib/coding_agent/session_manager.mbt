@@ -433,10 +433,10 @@ fn infer_next_entry_id(entries : Array[SessionEntry]) -> Int {
 }
 
 fn parse_generated_entry_id(id : String) -> Int? {
-  if !id.starts_with("entry-") {
+  if !id.has_prefix("entry-") {
     return None
   }
-  let parsed : Result[Int, Error] = try? @strconv.parse_int(id[6:])
+  let parsed : Result[Int, Error] = try? @string.parse_int(id[6:].to_string())
   match parsed {
     Ok(value) if value > 0 => Some(value)
     _ => None

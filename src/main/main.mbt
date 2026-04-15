@@ -1,5 +1,3 @@
-options("is-main": true)
-
 fn main {
   let runtime = default_host_runtime()
   match parse_cli_args(@env.args(), cwd=(runtime.current_dir)()) {

@@ -155,7 +155,7 @@ extern "js" fn host_exit_process(code : Int) -> Unit =
   #| }
 
 fn parse_int_string(text : String) -> Int {
-  let parsed : Result[Int, Error] = try? @strconv.parse_int(text)
+  let parsed : Result[Int, Error] = try? @string.parse_int(text)
   match parsed {
     Ok(value) => value
     Err(_) => -1

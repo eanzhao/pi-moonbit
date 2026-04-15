@@ -77,16 +77,18 @@ pub fn save_session_to_file(
 }
 
 fn parse_json_line(line : String, session_path : String) -> Result[Json, String] {
-  match (try? @json.parse(line)) {
-    Ok(json) => Ok(json)
-    Err(_) => Err("failed to parse JSONL record in " + session_path)
+  try @json.parse(line) catch {
+    _ => Err("failed to parse JSONL record in " + session_path)
+  } noraise {
+    json => Ok(json)
   }
 }
 
-fn decode_json[T : FromJson](json : Json) -> Result[T, String] {
-  match (try? @json.from_json(json)) {
-    Ok(value) => Ok(value)
-    Err(error) => Err(error.to_string())
+fn[T : FromJson] decode_json(json : Json) -> Result[T, String] {
+  try @json.from_json(json) catch {
+    error => Err(error.to_string())
+  } noraise {
+    value => Ok(value)
   }
 }
 
@@ -94,7 +96,7 @@ fn non_empty_lines(text : String) -> Array[String] {
   let lines : Array[String] = []
   for line in text.split("\n") {
     if line.length() > 0 {
-      lines.push(line)
+      lines.push(line.to_string())
     }
   }
   lines
@@ -112,10 +114,10 @@ fn infer_next_entry_id(entries : Array[@coding_agent.SessionEntry]) -> Int {
 }
 
 fn parse_generated_entry_id(id : String) -> Int? {
-  if !id.starts_with("entry-") {
+  if !id.has_prefix("entry-") {
     return None
   }
-  let parsed : Result[Int, Error] = try? @strconv.parse_int(id[6:])
+  let parsed : Result[Int, Error] = try? @string.parse_int(id[6:].to_string())
   match parsed {
     Ok(value) if value > 0 => Some(value)
     _ => None

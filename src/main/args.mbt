@@ -68,7 +68,7 @@ pub fn parse_cli_args(
         Some(level) => thinking_level = level
         None => return Err("unknown thinking level: " + argv[i])
       }
-    } else if arg.starts_with("-") {
+    } else if arg.has_prefix("-") {
       return Err("unknown option: " + arg)
     } else {
       messages.push(arg)
@@ -153,7 +153,7 @@ pub fn thinking_level_name(level : @agent.AgentThinkingLevel) -> String {
 pub fn resolve_cli_path(cwd : String, path : String) -> String {
   if is_absolute_path(path) {
     path
-  } else if cwd.ends_with("/") {
+  } else if cwd.has_suffix("/") {
     cwd + path
   } else {
     cwd + "/" + path
@@ -181,8 +181,8 @@ fn cli_model(
 }
 
 fn is_absolute_path(path : String) -> Bool {
-  path.starts_with("/") ||
-  path.starts_with("\\") ||
+  path.has_prefix("/") ||
+  path.has_prefix("\\") ||
   (path.length() >= 3 && (path[1:3] == ":/" || path[1:3] == ":\\")) ||
-  path.starts_with("~")
+  path.has_prefix("~")
 }

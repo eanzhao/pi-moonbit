@@ -1,4 +1,6 @@
 import {
   "eanzhao/pi-moonbit/lib/ai" @ai,
   "eanzhao/pi-moonbit/lib/agent" @agent,
+  "moonbitlang/core/json" @json,
+  "moonbitlang/core/string" @string,
 }

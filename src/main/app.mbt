@@ -35,9 +35,9 @@ pub fn create_cli_app(
   }
 
   let tools = create_default_tools(runtime, config.cwd)
-  let extensions = @coding_agent.ExtensionRuntime::new([cli_bash_history_extension()])
+  let extensions = @coding_agent.ExtensionRuntime::new(extensions=[cli_bash_history_extension()])
   match @coding_agent.AgentSession::new(
-    model=config.model,
+    config.model,
     system_prompt=config.system_prompt,
     thinking_level=config.thinking_level,
     session_manager=session_manager,
@@ -77,7 +77,7 @@ pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
 fn run_print_mode(app : CliApp, messages : Array[String]) -> Int {
   let mut exit_code = 0
   for message in messages {
-    let code = run_prompt(app, message, assistant_prefix="")
+    let code = run_prompt(app, message, "")
     if code != 0 {
       exit_code = code
     }
@@ -90,7 +90,7 @@ fn run_interactive_mode(app : CliApp, messages : Array[String]) -> Int {
 
   let mut exit_code = 0
   for message in messages {
-    let code = run_prompt(app, message, assistant_prefix="assistant> ")
+    let code = run_prompt(app, message, "assistant> ")
     if code != 0 {
       exit_code = code
     }
@@ -104,7 +104,7 @@ fn run_interactive_mode(app : CliApp, messages : Array[String]) -> Int {
           Continue => ()
           Exit(code) => return if code != 0 { code } else { exit_code }
           Prompt(prompt) => {
-            let code = run_prompt(app, prompt, assistant_prefix="assistant> ")
+            let code = run_prompt(app, prompt, "assistant> ")
             if code != 0 {
               exit_code = code
             }
@@ -112,6 +112,8 @@ fn run_interactive_mode(app : CliApp, messages : Array[String]) -> Int {
         }
     }
   }
+
+  exit_code
 }
 
 fn run_prompt(app : CliApp, prompt : String, assistant_prefix : String) -> Int {
@@ -121,7 +123,7 @@ fn run_prompt(app : CliApp, prompt : String, assistant_prefix : String) -> Int {
 
   match app.session.prompt_text(prompt) {
     Err(error) => {
-      (app.runtime.stderr_write)(error.to_string() + "\n")
+      (app.runtime.stderr_write)(agent_error_text(error) + "\n")
       1
     }
     Ok(_) => {
@@ -154,7 +156,7 @@ fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
   if line == "" {
     return Continue
   }
-  if !line.starts_with(":") {
+  if !line.has_prefix(":") {
     return Prompt(line)
   }
   if line == ":quit" || line == ":exit" {
@@ -185,8 +187,8 @@ fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
     )
     return Continue
   }
-  if line.starts_with(":model ") {
-    let next_id = line[7:]
+  if line.has_prefix(":model ") {
+    let next_id = line[7:].to_string()
     if next_id.length() == 0 {
       (app.runtime.stderr_write)("missing model id\n")
       return Continue
@@ -209,8 +211,8 @@ fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
     (app.runtime.stdout_write)("model switched to " + next_id + "\n")
     return Continue
   }
-  if line.starts_with(":thinking ") {
-    let raw_level = line[10:]
+  if line.has_prefix(":thinking ") {
+    let raw_level = line[10:].to_string()
     match parse_thinking_level(raw_level) {
       Some(level) => {
         ignore(app.session.set_thinking_level(level))
@@ -294,9 +296,9 @@ fn session_id_from_timestamp(timestamp : String) -> String {
 }
 
 fn resolve_workspace_path(cwd : String, path : String) -> String {
-  if path.starts_with("/") || path.starts_with("~") {
+  if path.has_prefix("/") || path.has_prefix("~") {
     path
-  } else if cwd.ends_with("/") {
+  } else if cwd.has_suffix("/") {
     cwd + path
   } else {
     cwd + "/" + path
@@ -331,6 +333,15 @@ fn assistant_error_text(message : @ai.AssistantMessage) -> String {
   match message.error_message {
     Some(text) if text.length() > 0 => text
     _ => "assistant request failed"
+  }
+}
+
+fn agent_error_text(error : @agent.AgentError) -> String {
+  match error {
+    @agent.AgentError::AlreadyRunning => "agent is already running"
+    @agent.AgentError::ContinueWithoutMessages => "cannot continue without prior messages"
+    @agent.AgentError::ContinueFromAssistant => "cannot continue from the current assistant state"
+    @agent.AgentError::StreamFailed(message) => "agent stream failed: " + message
   }
 }
 

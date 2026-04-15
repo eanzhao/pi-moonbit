@@ -1,10 +1,10 @@
 struct TestFile {
   path : String
-  mut content : String
+  content : String
 }
 
 struct TestFiles {
-  mut files : Array[TestFile]
+  files : Array[TestFile]
 }
 
 struct TestInputs {
@@ -42,15 +42,6 @@ fn TestFiles::exists(self : TestFiles, path : String) -> Bool {
     }
   }
   false
-}
-
-fn TestFiles::content(self : TestFiles, path : String) -> String? {
-  for file in self.files {
-    if file.path == path {
-      return Some(file.content)
-    }
-  }
-  None
 }
 
 fn TestInputs::new(lines : Array[String]) -> TestInputs {
@@ -157,9 +148,9 @@ test "parse_cli_args handles print mode and session path" {
   )
   match result {
     Ok(CliParseResult::Run(config)) => {
-      assert_eq(config.mode, CliMode::Print)
+      assert_true(config.mode == CliMode::Print)
       assert_eq(config.session_path, Some("/workspace/state.jsonl"))
-      assert_eq(config.thinking_level, @agent.AgentThinkingLevel::High)
+      assert_true(config.thinking_level == @agent.AgentThinkingLevel::High)
       assert_eq(config.messages, ["hello"])
     }
     _ => fail("expected runnable config")
@@ -198,7 +189,7 @@ test "session store round-trips transcript and session context" {
       assert_eq(transcript.length(), 1)
       let context = payload.session_manager.build_session_context()
       assert_eq(context.model, Some(test_model()))
-      assert_eq(context.thinking_level, Some(@agent.AgentThinkingLevel::Medium))
+      assert_true(context.thinking_level == Some(@agent.AgentThinkingLevel::Medium))
     }
     Err(message) => fail(message)
   }

@@ -117,7 +117,7 @@ test "session manager restore rebuilds branch state" {
 
       let context = manager.build_session_context()
       assert_eq(context.model, Some(coding_agent_test_model()))
-      assert_eq(context.thinking_level, Some(@agent.AgentThinkingLevel::Medium))
+      assert_true(context.thinking_level == Some(@agent.AgentThinkingLevel::Medium))
     }
     Err(message) => fail(message)
   }
