@@ -39,3 +39,34 @@ test "container removes child by handle" {
   assert_eq(rendered.length(), 1)
   assert_eq(rendered[0], "second  ")
 }
+
+test "truncated text keeps only first line and truncates by width" {
+  let text = TruncatedText::new(content="abcdef\nsecond", padding_x=1, padding_y=1)
+  let rendered = text.render(5)
+  assert_eq(rendered.length(), 3)
+  assert_eq(rendered[0], "     ")
+  assert_eq(rendered[1], " abc ")
+  assert_eq(rendered[2], "     ")
+}
+
+test "box applies padding around child content" {
+  let box = Box::new(padding_x=1, padding_y=1)
+  let _ = box.add_child(Text::new(content="hi"))
+  let rendered = box.render(6)
+  assert_eq(rendered.length(), 3)
+  assert_eq(rendered[0], "      ")
+  assert_eq(rendered[1], " hi   ")
+  assert_eq(rendered[2], "      ")
+}
+
+test "box applies background function to every rendered line" {
+  let box = Box::new(
+    padding_x=1,
+    padding_y=0,
+    bg_fn=Some(fn(line) { "[" + line + "]" }),
+  )
+  let _ = box.add_child(Text::new(content="ok"))
+  let rendered = box.render(4)
+  assert_eq(rendered.length(), 1)
+  assert_eq(rendered[0], "[ ok ]")
+}

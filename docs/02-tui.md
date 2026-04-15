@@ -10,6 +10,8 @@
 - 组件 trait `Component`
 - 容器组件 `Container`
 - 基础文本组件 `Text` 与 `Spacer`
+- 布局组件 `Box`
+- 单行展示组件 `TruncatedText`
 - 单行输入框 `Input`
 - 最小按键解析 `KeyEvent`
 - 基于行的差分渲染 `ScreenPatch`
@@ -109,7 +111,9 @@ lib/tui/
 ├── diff.mbt           # ScreenPatch 与 diff_lines（差分算法）
 ├── terminal.mbt       # Terminal trait 与 MemoryTerminal
 ├── container.mbt      # Container 组件（子组件管理）
+├── box.mbt            # 带 padding 的容器
 ├── text.mbt           # Text 组件（纯文本）
+├── truncated_text.mbt # 单行截断文本
 ├── spacer.mbt         # Spacer 组件（占位空白）
 ├── input.mbt          # 单行输入框
 ├── tui.mbt            # TUI 主调度器
@@ -141,7 +145,7 @@ pi-mono 原版的差分渲染精确到单个行段，实现很复杂。本阶段
 | 精确差分（行段级别） | 先用简化策略，够用 |
 | ANSI 样式、emoji、东亚宽字符处理 | 先用简化宽度模型 |
 | Kitty 键盘协议 | 先用原始字符串转发 |
-| 高级组件（Editor、Markdown、SelectList 等） | 先有基础组件 |
+| 高级组件（Editor、Markdown、SelectList 等） | 先有基础组件和简单布局组件 |
 | overlay、IME、图片协议 | 暂不需要 |
 
 ## 后续可以加强的方向
