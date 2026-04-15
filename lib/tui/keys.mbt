@@ -4,6 +4,8 @@ pub(all) enum KeyEvent {
   Escape
   Backspace
   Delete
+  Up
+  Down
   Left
   Right
   Home
@@ -17,9 +19,11 @@ pub(all) enum KeyEvent {
 pub fn parse_key_event(input : String) -> KeyEvent {
   match input {
     "\n" | "\r" | "\r\n" => Enter
-    "\u{1b}" => Escape
+    "\u{1b}" | "\u{03}" => Escape
     "\u{7f}" | "\b" => Backspace
     "\u{1b}[3~" => Delete
+    "\u{1b}[A" => Up
+    "\u{1b}[B" => Down
     "\u{1b}[D" => Left
     "\u{1b}[C" => Right
     "\u{1b}[H" | "\u{01}" => Home

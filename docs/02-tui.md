@@ -13,6 +13,8 @@
 - 布局组件 `Box`
 - 单行展示组件 `TruncatedText`
 - 单行输入框 `Input`
+- 加载组件 `Loader`
+- 选择列表 `SelectList`
 - 最小按键解析 `KeyEvent`
 - 基于行的差分渲染 `ScreenPatch`
 - `TUI` 调度器（渲染、焦点、输入转发）
@@ -39,10 +41,11 @@ pub(open) trait Component {
   render(Self, Int) -> Array[String]  // 给定宽度，返回要渲染的行
   handle_input(Self, String) -> Bool = _  // 处理键盘输入，返回是否消费
   invalidate(Self) -> Unit = _  // 使缓存失效
+  set_focused(Self, Bool) -> Unit = _  // 焦点变化通知
 }
 ```
 
-最简单的情况，一个组件只需要实现 `render` —— 给它一个宽度，它返回一行行的文字。`handle_input` 和 `invalidate` 有默认实现，简单组件可以不管。
+最简单的情况，一个组件只需要实现 `render` —— 给它一个宽度，它返回一行行的文字。`handle_input`、`invalidate` 和 `set_focused` 都有默认实现，简单组件可以不管；像 `Input` 这样需要显示光标的组件则会用 `set_focused` 同步内部状态。
 
 ### 容器（Container）
 
@@ -61,13 +64,13 @@ container.remove_child(handle)
 
 ```moonbit
 enum ScreenPatch {
-  Full(Array[String])           // 全量更新
-  Update(Int, Array[String])    // 从第 N 行开始更新
-  Noop                          // 没有变化，什么都不做
+  Noop
+  Full(Array[String])   // 全量更新
+  Update(LinePatch)     // 从某一行开始重写，并可清除尾部多余行
 }
 ```
 
-策略：找到第一个发生变化的行，从那里开始重写到末尾。比全屏重绘好，比 pi-mono 原版（精确到行段）简单。
+其中 `LinePatch` 会记录 `start_line`、新的行内容，以及需要清掉的尾部行数。策略仍然是：找到第一个发生变化的行，从那里开始重写到末尾。比全屏重绘好，比 pi-mono 原版（精确到行段）简单。
 
 ### 终端抽象（Terminal）
 
@@ -116,10 +119,14 @@ lib/tui/
 ├── truncated_text.mbt # 单行截断文本
 ├── spacer.mbt         # Spacer 组件（占位空白）
 ├── input.mbt          # 单行输入框
+├── loader.mbt         # 简单加载指示器
+├── select_list.mbt    # 可过滤的选择列表
 ├── tui.mbt            # TUI 主调度器
 ├── diff_test.mbt      # 差分算法测试
 ├── components_test.mbt # 组件渲染测试
 ├── input_test.mbt     # 输入框测试
+├── loader_test.mbt    # Loader 测试
+├── select_list_test.mbt # SelectList 测试
 └── tui_test.mbt       # TUI 调度器测试
 ```
 
@@ -145,13 +152,13 @@ pi-mono 原版的差分渲染精确到单个行段，实现很复杂。本阶段
 | 精确差分（行段级别） | 先用简化策略，够用 |
 | ANSI 样式、emoji、东亚宽字符处理 | 先用简化宽度模型 |
 | Kitty 键盘协议 | 先用原始字符串转发 |
-| 高级组件（Editor、Markdown、SelectList 等） | 先有基础组件和简单布局组件 |
+| 高级组件（Editor、Markdown 等） | 先把当前 CLI 真正需要的最小组件补齐 |
 | overlay、IME、图片协议 | 暂不需要 |
 
 ## 后续可以加强的方向
 
 - 更精确的文本宽度计算（ANSI 样式、Unicode 宽度）
 - Editor 等高级交互组件
-- 键盘事件规范化
+- 更完整的键盘事件规范化
 - overlay 和模态层
 - 真正的进程终端实现

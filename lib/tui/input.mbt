@@ -117,6 +117,7 @@ pub impl Component for Input with handle_input(self, input) {
       self.cursor = input_next_char_end(self.value, self.cursor)
       true
     }
+    Up | Down => false
     Home => {
       self.cursor = 0
       true

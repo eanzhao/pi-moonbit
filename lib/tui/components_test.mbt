@@ -70,3 +70,13 @@ test "box applies background function to every rendered line" {
   assert_eq(rendered.length(), 1)
   assert_eq(rendered[0], "[ ok ]")
 }
+
+test "container propagates focus state to children" {
+  let input = Input::new(value="ok")
+  let container = Container::new()
+  let _ = container.add_child(input)
+  container.set_focused(true)
+  let rendered = input.render(5)
+  assert_eq(rendered.length(), 1)
+  assert_eq(rendered[0], "ok|  ")
+}

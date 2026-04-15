@@ -69,3 +69,9 @@ pub impl Component for Container with invalidate(self) {
     child.component.invalidate()
   }
 }
+
+pub impl Component for Container with set_focused(self, focused) {
+  for child in self.children {
+    child.component.set_focused(focused)
+  }
+}
