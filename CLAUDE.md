@@ -4,14 +4,17 @@
 
 ## 项目简介
 
-pi-moonbit 是 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）的 MoonBit 重写。`pi-mono/` 目录是原始 TypeScript 代码（只读，不要修改）。
+pi-moonbit 是 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）的 MoonBit 重写。
+`pi-mono/` 目录是原始 TypeScript 代码（只读，不要修改）。
+
+**当前状态**：核心路径（Phase 01-05）已完成，55 个源文件、7200+ 行代码、67 个测试全部通过。
 
 ## 工具链
 
 ```bash
 moon check          # 类型检查
 moon build          # 编译
-moon test           # 运行测试
+moon test           # 运行全部测试
 moon test lib/ai    # 指定包测试
 ```
 
@@ -21,60 +24,104 @@ moon test lib/ai    # 指定包测试
 pi-moonbit/
 ├── docs/               # 架构文档（编号，每阶段一篇）
 ├── lib/
-│   ├── ai/             # LLM Provider 抽象层 ←→ pi-mono/packages/ai/src/
-│   ├── tui/            # 终端 UI 库        ←→ pi-mono/packages/tui/src/
-│   ├── agent/          # Agent 引擎         ←→ pi-mono/packages/agent/src/
-│   ├── coding_agent/   # 编码助手           ←→ pi-mono/packages/coding-agent/src/
-│   ├── web_ui/         # Web UI             ←→ pi-mono/packages/web-ui/src/
-│   ├── mom/            # Slack 集成         ←→ pi-mono/packages/mom/src/
-│   └── pods/           # GPU Pod 管理       ←→ pi-mono/packages/pods/src/
-├── src/main/           # CLI 入口
+│   ├── ai/             # Phase 01 — LLM Provider 抽象层
+│   ├── tui/            # Phase 02 — 终端 UI 库
+│   ├── agent/          # Phase 03 — Agent 引擎
+│   ├── coding_agent/   # Phase 04 — 编码助手核心
+│   ├── web_ui/         # (待开发) Web UI
+│   ├── mom/            # (待开发) Slack 集成
+│   └── pods/           # (待开发) GPU Pod 管理
+├── src/main/           # Phase 05 — CLI 入口（JS target 可运行）
 └── pi-mono/            # 原始 TypeScript（只读）
 ```
 
+## 已完成的 Phase
+
+| Phase | 包 | 核心内容 |
+|-------|-----|---------|
+| 01 | `lib/ai` | Message/ContentBlock/StopReason enum, Model, Provider 注册, stream/complete |
+| 02 | `lib/tui` | Component trait, 差分渲染, Container/Input/SelectList/Loader 等组件 |
+| 03 | `lib/agent` | Agent 回合循环, 工具三阶段执行, 事件系统, steering/follow-up 队列 |
+| 04 | `lib/coding_agent` | append-only 会话树, 分支/compaction, 扩展钩子, read/write/edit/bash 工具 |
+| 05 | `src/main` | CLI 参数解析, JSONL session 持久化, Print/REPL 模式, JS host FFI |
+
 ## MoonBit 编码规范
 
-- **数据容器**用 `struct`：`StreamOptions`、`Tool`、`Context` 等
-- **可区分类型**用 `enum`（ADT）：`Message`、`StopReason`、`AssistantMessageEvent`
-- **行为抽象**用 `trait`（跨包扩展时用 `pub(open) trait`）：`Provider`、`Component`
-- **开放标识符**用 newtype 包装：`type ApiId String`
-- **错误处理**用 `Result[T, E]` + `!` 语法
-- **优先用模式匹配**而不是 if/else 链
-- 测试写在 `*_test.mbt` 的 `test "..."` 块中
+### 类型选择
 
-命名：包名 `snake_case`，类型 `PascalCase`，函数 `snake_case`。
+- **数据容器**用 `struct`：`StreamOptions`、`Tool`、`Context`
+- **可区分类型**用 `enum`（ADT）：`Message`、`StopReason`、`AssistantMessageEvent`
+- **行为抽象**用 `trait`（跨包扩展时用 `pub(open) trait`）：`Component`、`Terminal`
+- **开放标识符**用单字段 struct：`pub(all) struct ApiId(String)`
+- **错误处理**用 `Result[T, E]` 和 `suberror`
+
+### 可见性
+
+- 需要外部构造的 struct/enum 用 `pub(all)`（不是 `pub`，后者只允许读取）
+- 内部类型用 `priv struct` 或不加修饰符
+
+### derive 注意事项
+
+- 当前使用 `derive(Show)` —— 有弃用警告，但 `Json` 类型不支持 `derive(Debug)`，暂无法迁移
+- Session 类型需要 `derive(Eq, ToJson, FromJson)` 支持 JSONL 持久化
+
+### 命名
+
+- 包名：`snake_case`（如 `coding_agent`）
+- 类型/Enum：`PascalCase`（如 `Message`、`StopReason`）
+- 函数/方法：`snake_case`（如 `calculate_cost`）
+- 常量：`snake_case`（如 `api_anthropic_messages`）
+- 测试：`test "描述性文字"` 块
+
+### 包配置
+
+- 包配置文件是 `moon.pkg`（自定义 DSL 格式，不是 JSON）
+- 依赖声明示例：`import { "eanzhao/pi-moonbit/lib/ai" @ai, }`
+- 多 target 文件选择通过 `options(targets: { ... })` 配置
 
 ## 开发流程
 
 1. **按依赖顺序开发**：ai、tui（并行） → agent → coding_agent → main
 2. **每阶段一篇文档 + 一次提交**：`docs/NN-topic.md`
 3. **实现前先读 pi-mono 对应源码**
-4. **编译目标**：Native 为主，仅 web_ui 用 WASM
+4. **编译目标**：JS（主要，Phase 05 可运行）、Native/WASM（placeholder）
 5. **提交格式**：`feat(ai): add Message enum and Provider trait`
 
 ## TypeScript → MoonBit 关键映射
 
 | TypeScript | MoonBit | 例子 |
 |-----------|---------|------|
-| `interface`（纯数据） | `struct` | `StreamOptions`、`Context`、`Tool` |
-| `interface`（有方法） | `trait` | `Provider.stream()`、`Component.render()` |
-| 联合类型 `A \| B` | `enum` | `Message`、`StopReason`、`AssistantMessageEvent` |
-| `string & {}` | newtype `String` | `ApiId`、`ProviderId` |
-| 声明合并 | 注册表模式 | `register_provider()`、CustomAgentMessages 反序列化表 |
-| `async/await` | `async fn`（实验性）或回调 | 事件流用 `EventHandler` 回调 |
-| `AsyncIterable` | 回调或 `Iter`（保底方案） | `stream()` 推送事件 |
-| JSON 原生 | `@json` 库 | — |
-| npm workspaces | MoonBit 单模块多包 | — |
-| `package.json` | `moon.pkg`（非 JSON 格式） | — |
+| `interface`（纯数据） | `pub(all) struct` | `StreamOptions`、`Context`、`Tool` |
+| `interface`（有方法） | `pub(open) trait` | `Component.render()`、`Terminal.present()` |
+| 联合类型 `A \| B` | `pub(all) enum` | `Message`、`StopReason`、`AssistantMessageEvent` |
+| `string & {}` | 单字段 struct `struct ApiId(String)` | `ApiId`、`ProviderId` |
+| 声明合并 | 注册表模式 | `register_provider()` |
+| `async/await` | 回调 | `EventHandler` 包装回调函数 |
+| `AsyncIterable` | 回调推送 | `stream()` 通过 handler 推送事件 |
+| JSON 原生 | 内置 `Json` 枚举 | 在 builtin 中，无需导入 |
+| npm workspaces | MoonBit 单模块多包 | `moon.mod.json` + 各包 `moon.pkg` |
 
-## pi-mono 关键抽象
+## 架构要点
 
-实现各包时，需要从 pi-mono 移植的核心抽象：
+### lib/ai — Provider 注册表
 
-| 抽象 | 包 | 职责 |
-|------|-----|------|
-| `Provider` | ai | LLM 提供商，核心方法 `stream()` / `complete()` |
-| `AgentLoop` | agent | 编排 LLM 调用和工具执行的循环引擎 |
-| `AgentTool` | agent | 工具定义（schema + execute） |
-| `Component` | tui | UI 元素，核心方法 `render()` + 输入处理 |
-| `Extension` | coding-agent | 插件，含生命周期钩子（on_start / on_before_tool_call / on_after_tool_call） |
+函数式注册（非 trait）：`register_provider(api_id, stream_fn)`。
+`stream()` 按 model.api 查找已注册函数并委托。`complete()` 基于 `stream()` 收集终止事件。
+
+### lib/agent — 双层 API
+
+- 低层 `run_agent_loop()` — 纯函数式，接收 context/config/emit 回调
+- 高层 `Agent` — 有状态包装，管理 transcript/listener/queue
+
+### lib/coding_agent — Session 树
+
+- `SessionManager` 维护 append-only entry 数组 + leaf_id（当前分支叶节点）
+- `build_transcript_messages()` 只返回标准消息（给 UI）
+- `build_session_context()` 返回完整上下文（给 LLM，含 compaction/branch summary）
+- `AgentSession.bind_agent()` 通过 `set_transform_context` 注入 session context
+
+### src/main — 多 target 架构
+
+- `host_js.mbt` — 完整 Node.js FFI 实现（fs/child_process/stdin）
+- `host_native.mbt` / `host_wasm.mbt` — placeholder，返回明确错误
+- `session_store.mbt` — JSONL 格式持久化（header 行 + entry 行）
