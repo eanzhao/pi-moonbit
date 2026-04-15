@@ -17,6 +17,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 | `lib/tui` | 已完成（核心） | 终端 UI 框架（组件系统、差分渲染） |
 | `lib/agent` | 已完成（核心） | Agent 循环引擎、工具调用、事件系统、状态管理 |
 | `lib/coding_agent` | 已完成（核心） | 编码助手核心：内置工具协议、会话管理、扩展系统 |
+| `src/main` | 已完成（最小版） | CLI 入口、JSONL session、真实文件/命令 runtime（JS host） |
 | `lib/web_ui` | 待开发 | Web 聊天界面（WASM） |
 | `lib/mom` | 待开发 | Slack 机器人集成 |
 | `lib/pods` | 待开发 | GPU Pod 管理 |
@@ -42,6 +43,7 @@ pi-moonbit/
 │   ├── ai/             # LLM Provider 抽象层
 │   ├── tui/            # 终端 UI 库
 │   └── ...             # 其余待开发
+├── src/main/           # CLI 入口（phase 05）
 └── pi-mono/            # 原始 TypeScript 实现（只读参考，不修改）
 ```
 
@@ -54,6 +56,7 @@ pi-moonbit/
 - [02 - 终端 UI 层](docs/02-tui.md)
 - [03 - Agent 引擎](docs/03-agent.md)
 - [04 - Coding Agent 核心](docs/04-coding-agent.md)
+- [05 - CLI 入口与集成](docs/05-cli.md)
 
 ## 参考
 

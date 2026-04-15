@@ -4,7 +4,7 @@ pub(all) enum ImageMimeType {
   Png
   Gif
   Webp
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 图片内容，包含 base64 编码的数据和可选的原始 URL。
 pub(all) struct ImageContent {
@@ -13,7 +13,7 @@ pub(all) struct ImageContent {
   data : String
   /// 图片的原始 URL（如果有）
   url : String?
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 工具调用信息，由 LLM 在响应中生成。
 pub(all) struct ToolCall {
@@ -23,7 +23,7 @@ pub(all) struct ToolCall {
   name : String
   /// 工具参数（JSON 格式）
   arguments : Json
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 消息内容块，对话中消息的组成单元。
 /// 一条消息可以包含多个不同类型的内容块。
@@ -36,7 +36,7 @@ pub(all) enum ContentBlock {
   Image(ImageContent)
   /// 工具调用请求
   ToolCall(ToolCall)
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| LLM 停止生成的原因。
 pub(all) enum StopReason {
@@ -50,7 +50,7 @@ pub(all) enum StopReason {
   Error
   /// 被用户中止
   Aborted
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 费用明细，按输入/输出/缓存分类（单位：美元）。
 pub(all) struct CostBreakdown {
@@ -59,7 +59,7 @@ pub(all) struct CostBreakdown {
   cache_read : Double
   cache_write : Double
   total : Double
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| Token 用量统计及对应的费用。
 pub(all) struct Usage {
@@ -75,7 +75,7 @@ pub(all) struct Usage {
   total_tokens : Int
   /// 费用明细
   cost : CostBreakdown
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 创建一个所有字段为零的 Usage 实例。
 pub fn Usage::zero() -> Usage {
@@ -92,7 +92,7 @@ pub fn Usage::zero() -> Usage {
 ///| 用户发送的消息。
 pub(all) struct UserMessage {
   content : Array[ContentBlock]
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| LLM 返回的助手消息，包含响应内容及元数据。
 pub(all) struct AssistantMessage {
@@ -112,7 +112,7 @@ pub(all) struct AssistantMessage {
   error_message : String?
   /// 响应时间戳（Unix 秒）
   timestamp : Double
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 工具执行结果消息，用于将工具的输出反馈给 LLM。
 pub(all) struct ToolResultMessage {
@@ -124,11 +124,11 @@ pub(all) struct ToolResultMessage {
   tool_name : String
   /// 执行是否出错
   error : Bool
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 对话消息的统一类型，构成对话历史的基本单元。
 pub(all) enum Message {
   User(UserMessage)
   Assistant(AssistantMessage)
   ToolResult(ToolResultMessage)
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)

@@ -4,7 +4,7 @@ pub(all) struct CustomContextMessage {
   content : Array[@ai.ContentBlock]
   display : Bool
   details : Json?
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 非 tool 通道的 bash 执行记录。
 pub(all) struct BashExecutionMessage {
@@ -14,14 +14,14 @@ pub(all) struct BashExecutionMessage {
   cancelled : Bool
   truncated : Bool
   full_output_path : String?
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 会话头。phase 04 先保留内存态 shape，文件持久化留给 CLI 集成层。
 pub(all) struct SessionHeader {
   id : String
   timestamp : String
   parent_session : String?
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 标准 transcript 消息 entry。
 pub(all) struct SessionMessageEntry {
@@ -29,7 +29,7 @@ pub(all) struct SessionMessageEntry {
   parent_id : String?
   timestamp : String
   message : @ai.Message
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 思维级别切换 entry。
 pub(all) struct ThinkingLevelChangeEntry {
@@ -37,7 +37,7 @@ pub(all) struct ThinkingLevelChangeEntry {
   parent_id : String?
   timestamp : String
   thinking_level : @agent.AgentThinkingLevel
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 模型切换 entry。
 pub(all) struct ModelChangeEntry {
@@ -45,7 +45,7 @@ pub(all) struct ModelChangeEntry {
   parent_id : String?
   timestamp : String
   model : @ai.Model
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 对话压缩摘要 entry。
 pub(all) struct CompactionEntry {
@@ -57,7 +57,7 @@ pub(all) struct CompactionEntry {
   tokens_before : Int
   details : Json?
   from_hook : Bool
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 分支摘要 entry。
 pub(all) struct BranchSummaryEntry {
@@ -68,7 +68,7 @@ pub(all) struct BranchSummaryEntry {
   summary : String
   details : Json?
   from_hook : Bool
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 扩展私有状态 entry。
 pub(all) struct CustomEntry {
@@ -77,7 +77,7 @@ pub(all) struct CustomEntry {
   timestamp : String
   custom_type : String
   data : Json?
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 参与 LLM context 的上下文消息 entry。
 pub(all) struct ContextMessageEntry {
@@ -85,13 +85,13 @@ pub(all) struct ContextMessageEntry {
   parent_id : String?
   timestamp : String
   message : ContextMessage
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| coding-agent 扩展出来的上下文消息。
 pub(all) enum ContextMessage {
   Custom(CustomContextMessage)
   BashExecution(BashExecutionMessage)
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| append-only 会话 entry。
 pub(all) enum SessionEntry {
@@ -102,7 +102,7 @@ pub(all) enum SessionEntry {
   BranchSummary(BranchSummaryEntry)
   Custom(CustomEntry)
   ContextMessage(ContextMessageEntry)
-}
+} derive(Eq, ToJson, FromJson)
 
 ///| 解析后的会话上下文。
 pub(all) struct SessionContext {

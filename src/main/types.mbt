@@ -1,0 +1,59 @@
+pub(all) enum CliMode {
+  Interactive
+  Print
+} derive(Eq)
+
+pub(all) struct CliConfig {
+  mode : CliMode
+  system_prompt : String
+  session_path : String?
+  persist_session : Bool
+  cwd : String
+  model : @ai.Model
+  thinking_level : @agent.AgentThinkingLevel
+  messages : Array[String]
+} derive(Eq)
+
+pub(all) enum CliParseResult {
+  Run(CliConfig)
+  Help(String)
+} derive(Eq)
+
+pub(all) struct CliHostRuntime {
+  read_text : (String) -> Result[String, String]
+  write_text : (String, String) -> Result[Unit, String]
+  file_exists : (String) -> Bool
+  run_command : (String, String) -> Result[@coding_agent.CommandExecutionResult, String]
+  stdout_write : (String) -> Unit
+  stderr_write : (String) -> Unit
+  read_line : (String) -> String?
+  current_dir : () -> String
+  now_iso : () -> String
+  agent_stream : @agent.AgentStreamFn?
+}
+
+pub(all) struct PersistedSessionFileHeader {
+  kind : String
+  version : Int
+  header : @coding_agent.SessionHeader
+  cwd : String
+  leaf_id : String?
+  next_entry_id : Int
+} derive(Eq, ToJson, FromJson)
+
+pub(all) struct PersistedSessionRecord {
+  kind : String
+  entry : @coding_agent.SessionEntry
+} derive(Eq, ToJson, FromJson)
+
+pub(all) struct LoadedSession {
+  cwd : String
+  session_manager : @coding_agent.SessionManager
+}
+
+pub(all) struct CliApp {
+  session : @coding_agent.AgentSession
+  runtime : CliHostRuntime
+  session_path : String?
+  cwd : String
+}

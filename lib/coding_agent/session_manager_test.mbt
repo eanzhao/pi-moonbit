@@ -97,3 +97,28 @@ test "session manager tracks model and thinking changes in context" {
     None => fail("expected saved thinking level")
   }
 }
+
+test "session manager restore rebuilds branch state" {
+  let session = SessionManager::new(session_id="restore-session")
+  let _ = session.append_message(coding_agent_user_message("hello"))
+  let _ = session.append_model_change(coding_agent_test_model())
+  let _ = session.append_thinking_level_change(@agent.AgentThinkingLevel::Medium)
+
+  let restored = SessionManager::restore(
+    session.get_header(),
+    session.get_entries(),
+    leaf_id=session.get_leaf_id(),
+  )
+  match restored {
+    Ok(manager) => {
+      let transcript = manager.build_transcript_messages()
+      assert_eq(transcript.length(), 1)
+      assert_eq(coding_agent_message_text(transcript[0]), "hello")
+
+      let context = manager.build_session_context()
+      assert_eq(context.model, Some(coding_agent_test_model()))
+      assert_eq(context.thinking_level, Some(@agent.AgentThinkingLevel::Medium))
+    }
+    Err(message) => fail(message)
+  }
+}

@@ -1,0 +1,5 @@
+import {
+  "eanzhao/pi-moonbit/lib/ai" @ai,
+  "eanzhao/pi-moonbit/lib/agent" @agent,
+  "eanzhao/pi-moonbit/lib/coding_agent" @coding_agent,
+}

@@ -1,0 +1,391 @@
+priv enum ReplCommandResult {
+  Continue
+  Exit(Int)
+  Prompt(String)
+}
+
+pub fn default_session_path(cwd : String) -> String {
+  resolve_cli_path(cwd, ".pi-moonbit/session.jsonl")
+}
+
+pub fn create_cli_app(
+  config : CliConfig,
+  runtime : CliHostRuntime
+) -> Result[CliApp, String] {
+  let effective_session_path = if config.persist_session {
+    match config.session_path {
+      Some(path) => Some(path)
+      None => Some(default_session_path(config.cwd))
+    }
+  } else {
+    None
+  }
+
+  let session_manager = match effective_session_path {
+    Some(path) =>
+      if (runtime.file_exists)(path) {
+        match load_session_from_file(runtime, path) {
+          Ok(loaded) => loaded.session_manager
+          Err(message) => return Err(message)
+        }
+      } else {
+        new_session_manager(config, runtime)
+      }
+    None => new_session_manager(config, runtime)
+  }
+
+  let tools = create_default_tools(runtime, config.cwd)
+  let extensions = @coding_agent.ExtensionRuntime::new([cli_bash_history_extension()])
+  match @coding_agent.AgentSession::new(
+    model=config.model,
+    system_prompt=config.system_prompt,
+    thinking_level=config.thinking_level,
+    session_manager=session_manager,
+    tools=tools,
+    extensions=extensions,
+  ) {
+    Err(message) => Err(message)
+    Ok(session) => {
+      match runtime.agent_stream {
+        Some(stream_fn) => session.agent.set_stream_fn(stream_fn)
+        None => ()
+      }
+      Ok({
+        session,
+        runtime,
+        session_path: effective_session_path,
+        cwd: config.cwd,
+      })
+    }
+  }
+}
+
+pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
+  match create_cli_app(config, runtime) {
+    Err(message) => {
+      (runtime.stderr_write)(message + "\n")
+      1
+    }
+    Ok(app) =>
+      match config.mode {
+        CliMode::Print => run_print_mode(app, config.messages)
+        CliMode::Interactive => run_interactive_mode(app, config.messages)
+      }
+  }
+}
+
+fn run_print_mode(app : CliApp, messages : Array[String]) -> Int {
+  let mut exit_code = 0
+  for message in messages {
+    let code = run_prompt(app, message, assistant_prefix="")
+    if code != 0 {
+      exit_code = code
+    }
+  }
+  exit_code
+}
+
+fn run_interactive_mode(app : CliApp, messages : Array[String]) -> Int {
+  (app.runtime.stdout_write)("Interactive mode. Type :help for commands.\n")
+
+  let mut exit_code = 0
+  for message in messages {
+    let code = run_prompt(app, message, assistant_prefix="assistant> ")
+    if code != 0 {
+      exit_code = code
+    }
+  }
+
+  while true {
+    match (app.runtime.read_line)("pi> ") {
+      None => return exit_code
+      Some(line) =>
+        match handle_repl_command(app, line) {
+          Continue => ()
+          Exit(code) => return if code != 0 { code } else { exit_code }
+          Prompt(prompt) => {
+            let code = run_prompt(app, prompt, assistant_prefix="assistant> ")
+            if code != 0 {
+              exit_code = code
+            }
+          }
+        }
+    }
+  }
+}
+
+fn run_prompt(app : CliApp, prompt : String, assistant_prefix : String) -> Int {
+  if prompt == "" {
+    return 0
+  }
+
+  match app.session.prompt_text(prompt) {
+    Err(error) => {
+      (app.runtime.stderr_write)(error.to_string() + "\n")
+      1
+    }
+    Ok(_) => {
+      match persist_session(app) {
+        Ok(_) => ()
+        Err(message) => {
+          (app.runtime.stderr_write)(message + "\n")
+          return 1
+        }
+      }
+      match last_assistant_message(app.session.session_manager.build_transcript_messages()) {
+        Some(message) =>
+          if assistant_message_failed(message) {
+            (app.runtime.stderr_write)(assistant_error_text(message) + "\n")
+            1
+          } else {
+            let rendered = assistant_message_text(message)
+            if rendered.length() > 0 {
+              (app.runtime.stdout_write)(assistant_prefix + rendered + "\n")
+            }
+            0
+          }
+        None => 0
+      }
+    }
+  }
+}
+
+fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
+  if line == "" {
+    return Continue
+  }
+  if !line.starts_with(":") {
+    return Prompt(line)
+  }
+  if line == ":quit" || line == ":exit" {
+    return Exit(0)
+  }
+  if line == ":help" {
+    (app.runtime.stdout_write)([
+      "Commands:",
+      "  :help",
+      "  :session",
+      "  :model <id>",
+      "  :thinking <level>",
+      "  :quit",
+    ].join("\n") + "\n")
+    return Continue
+  }
+  if line == ":session" {
+    let path = match app.session_path {
+      Some(path) => path
+      None => "(ephemeral)"
+    }
+    (app.runtime.stdout_write)(
+      "session: " + path +
+      "\nmodel: " + app.session.agent.state.model.id +
+      "\nthinking: " + thinking_level_name(app.session.agent.state.thinking_level) +
+      "\nentries: " + app.session.session_manager.get_entries().length().to_string() +
+      "\n",
+    )
+    return Continue
+  }
+  if line.starts_with(":model ") {
+    let next_id = line[7:]
+    if next_id.length() == 0 {
+      (app.runtime.stderr_write)("missing model id\n")
+      return Continue
+    }
+    let current = app.session.agent.state.model
+    let next_model : @ai.Model = {
+      id: next_id,
+      name: next_id,
+      api: current.api,
+      provider: current.provider,
+      base_url: current.base_url,
+      reasoning: current.reasoning,
+      input_modalities: current.input_modalities.copy(),
+      cost: current.cost,
+      context_window: current.context_window,
+      max_tokens: current.max_tokens,
+    }
+    ignore(app.session.set_model(next_model))
+    ignore(persist_session(app))
+    (app.runtime.stdout_write)("model switched to " + next_id + "\n")
+    return Continue
+  }
+  if line.starts_with(":thinking ") {
+    let raw_level = line[10:]
+    match parse_thinking_level(raw_level) {
+      Some(level) => {
+        ignore(app.session.set_thinking_level(level))
+        ignore(persist_session(app))
+        (app.runtime.stdout_write)("thinking switched to " + raw_level + "\n")
+      }
+      None => (app.runtime.stderr_write)("unknown thinking level: " + raw_level + "\n")
+    }
+    return Continue
+  }
+  (app.runtime.stderr_write)("unknown command: " + line + "\n")
+  Continue
+}
+
+fn create_default_tools(
+  runtime : CliHostRuntime,
+  cwd : String
+) -> Array[@agent.AgentTool] {
+  let workspace_runtime : @coding_agent.WorkspaceRuntime = {
+    read_text: fn(path) {
+      (runtime.read_text)(resolve_workspace_path(cwd, path))
+    },
+    write_text: fn(path, content) {
+      (runtime.write_text)(resolve_workspace_path(cwd, path), content)
+    },
+  }
+  let command_runtime : @coding_agent.CommandRuntime = {
+    run: fn(command) {
+      (runtime.run_command)(command, cwd)
+    },
+  }
+  [
+    @coding_agent.create_read_tool(workspace_runtime),
+    @coding_agent.create_write_tool(workspace_runtime),
+    @coding_agent.create_edit_tool(workspace_runtime),
+    @coding_agent.create_bash_tool(command_runtime),
+  ]
+}
+
+fn cli_bash_history_extension() -> @coding_agent.CodingExtension {
+  {
+    name: "cli-bash-history",
+    tools: [],
+    on_start: None,
+    before_tool_call: None,
+    after_tool_call: Some(fn(tool_context, context) {
+      if tool_context.tool_call.name != "bash" {
+        return None
+      }
+
+      let command = json_string_field(tool_context.args, "command").unwrap_or("")
+      let output = content_blocks_text(tool_context.result.content)
+      let exit_code = json_int_field(tool_context.result.details, "exit_code")
+      let cancelled = json_bool_field(tool_context.result.details, "cancelled").unwrap_or(false)
+      let truncated = json_bool_field(tool_context.result.details, "truncated").unwrap_or(false)
+      let full_output_path = json_string_field(tool_context.result.details, "full_output_path")
+      ignore(context.session_manager.append_bash_execution(
+        command,
+        output,
+        exit_code~,
+        cancelled~,
+        truncated~,
+        full_output_path~,
+      ))
+      None
+    }),
+  }
+}
+
+fn new_session_manager(_config : CliConfig, runtime : CliHostRuntime) -> @coding_agent.SessionManager {
+  let timestamp = (runtime.now_iso)()
+  @coding_agent.SessionManager::new(
+    session_id=session_id_from_timestamp(timestamp),
+    timestamp=timestamp,
+  )
+}
+
+fn session_id_from_timestamp(timestamp : String) -> String {
+  "session-" +
+  timestamp.replace(old=":", new="-").replace(old=".", new="-")
+}
+
+fn resolve_workspace_path(cwd : String, path : String) -> String {
+  if path.starts_with("/") || path.starts_with("~") {
+    path
+  } else if cwd.ends_with("/") {
+    cwd + path
+  } else {
+    cwd + "/" + path
+  }
+}
+
+fn persist_session(app : CliApp) -> Result[Unit, String] {
+  match app.session_path {
+    Some(path) => save_session_to_file(app.runtime, app.session.session_manager, path, app.cwd)
+    None => Ok(())
+  }
+}
+
+fn last_assistant_message(messages : Array[@ai.Message]) -> @ai.AssistantMessage? {
+  let mut i = messages.length()
+  while i > 0 {
+    i = i - 1
+    match messages[i] {
+      @ai.Message::Assistant(message) => return Some(message)
+      _ => ()
+    }
+  }
+  None
+}
+
+fn assistant_message_failed(message : @ai.AssistantMessage) -> Bool {
+  message.stop_reason == @ai.StopReason::Error ||
+  message.stop_reason == @ai.StopReason::Aborted
+}
+
+fn assistant_error_text(message : @ai.AssistantMessage) -> String {
+  match message.error_message {
+    Some(text) if text.length() > 0 => text
+    _ => "assistant request failed"
+  }
+}
+
+fn assistant_message_text(message : @ai.AssistantMessage) -> String {
+  let parts : Array[String] = []
+  for block in message.content {
+    match block {
+      @ai.ContentBlock::Text(text) => parts.push(text)
+      _ => ()
+    }
+  }
+  parts.join("")
+}
+
+fn content_blocks_text(content : Array[@ai.ContentBlock]) -> String {
+  let parts : Array[String] = []
+  for block in content {
+    match block {
+      @ai.ContentBlock::Text(text) => parts.push(text)
+      _ => ()
+    }
+  }
+  parts.join("")
+}
+
+fn json_string_field(json : Json, key : String) -> String? {
+  if json is Object(obj) {
+    match obj.get(key) {
+      Some(String(value)) => Some(value)
+      _ => None
+    }
+  } else {
+    None
+  }
+}
+
+fn json_bool_field(json : Json, key : String) -> Bool? {
+  if json is Object(obj) {
+    match obj.get(key) {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    }
+  } else {
+    None
+  }
+}
+
+fn json_int_field(json : Json, key : String) -> Int? {
+  if json is Object(obj) {
+    match obj.get(key) {
+      Some(Number(value, ..)) => Some(value.to_int())
+      _ => None
+    }
+  } else {
+    None
+  }
+}

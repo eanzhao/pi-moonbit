@@ -3,7 +3,7 @@ pub(all) enum CacheRetention {
   None
   Short
   Long
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 思维链的深度级别。
 pub(all) enum ThinkingLevel {
@@ -12,7 +12,7 @@ pub(all) enum ThinkingLevel {
   Medium
   High
   XHigh
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 思维链模式。
 pub(all) enum ThinkingMode {
@@ -22,7 +22,7 @@ pub(all) enum ThinkingMode {
   Enabled
   /// 由模型自行决定是否使用思维链
   Adaptive
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 工具定义，描述一个可供 LLM 调用的外部工具。
 pub(all) struct Tool {
@@ -32,7 +32,7 @@ pub(all) struct Tool {
   description : String
   /// 工具参数的 JSON Schema
   parameters : Json
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 流式请求的配置选项。
 /// 所有字段均为可选，未设置时使用供应商的默认值。
@@ -57,7 +57,7 @@ pub(all) struct StreamOptions {
   thinking_budget_tokens : Int?
   /// 推理深度级别
   reasoning : ThinkingLevel?
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 创建一个所有字段为 None 的默认 StreamOptions。
 pub fn StreamOptions::default() -> StreamOptions {
@@ -83,4 +83,4 @@ pub(all) struct Context {
   messages : Array[Message]
   /// 可用工具列表
   tools : Array[Tool]
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)

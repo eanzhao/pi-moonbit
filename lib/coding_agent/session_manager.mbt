@@ -20,6 +20,45 @@ pub fn SessionManager::new(
   }
 }
 
+///| 从已持久化的 header + entries 恢复 SessionManager。
+pub fn SessionManager::restore(
+  header : SessionHeader,
+  entries : Array[SessionEntry],
+  leaf_id? : String? = None,
+  next_entry_id? : Int? = None
+) -> Result[SessionManager, String] {
+  for entry in entries {
+    match entry_parent_id(entry) {
+      Some(parent_id) =>
+        if find_session_entry(entries, parent_id) is None {
+          return Err("entry \{entry_id(entry)} has unknown parent \{parent_id}")
+        }
+      None => ()
+    }
+  }
+
+  let restored_leaf_id = match leaf_id {
+    Some(id) =>
+      match find_session_entry(entries, id) {
+        Some(_) => Some(id)
+        None => return Err("leaf entry \{id} not found")
+      }
+    None => default_leaf_id(entries)
+  }
+
+  let restored_next_entry_id = match next_entry_id {
+    Some(value) if value > 0 => value
+    _ => infer_next_entry_id(entries)
+  }
+
+  Ok({
+    header,
+    entries: entries.copy(),
+    leaf_id: restored_leaf_id,
+    next_entry_id: restored_next_entry_id,
+  })
+}
+
 ///| 获取会话头。
 pub fn SessionManager::get_header(self : SessionManager) -> SessionHeader {
   self.header
@@ -373,4 +412,33 @@ fn reverse_entries(entries : Array[SessionEntry]) -> Array[SessionEntry] {
     reversed.push(entries[entries.length() - 1 - i])
   }
   reversed
+}
+
+fn default_leaf_id(entries : Array[SessionEntry]) -> String? {
+  if entries.length() == 0 {
+    return None
+  }
+  Some(entry_id(entries[entries.length() - 1]))
+}
+
+fn infer_next_entry_id(entries : Array[SessionEntry]) -> Int {
+  let mut max_id = 0
+  for entry in entries {
+    match parse_generated_entry_id(entry_id(entry)) {
+      Some(value) if value > max_id => max_id = value
+      _ => ()
+    }
+  }
+  max_id + 1
+}
+
+fn parse_generated_entry_id(id : String) -> Int? {
+  if !id.starts_with("entry-") {
+    return None
+  }
+  let parsed : Result[Int, Error] = try? @strconv.parse_int(id[6:])
+  match parsed {
+    Ok(value) if value > 0 => Some(value)
+    _ => None
+  }
 }

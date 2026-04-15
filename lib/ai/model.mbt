@@ -1,16 +1,16 @@
 ///| API 标识符（开放联合类型，允许任意字符串值）。
 /// 使用 newtype 包装而非枚举，以支持用户自定义的 API 协议。
-pub(all) struct ApiId(String) derive(Eq, Hash, Show)
+pub(all) struct ApiId(String) derive(Eq, Hash, Show, ToJson, FromJson)
 
 ///| 供应商标识符（开放联合类型，允许任意字符串值）。
 /// 用于区分不同的 LLM 服务商，如 Anthropic、OpenAI 等。
-pub(all) struct ProviderId(String) derive(Eq, Hash, Show)
+pub(all) struct ProviderId(String) derive(Eq, Hash, Show, ToJson, FromJson)
 
 ///| 模型支持的输入模态。
 pub(all) enum InputModality {
   Text
   Image
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| 模型的价格信息，单位为每百万 token 的费用（美元）。
 pub(all) struct ModelCost {
@@ -18,7 +18,7 @@ pub(all) struct ModelCost {
   output : Double
   cache_read : Double
   cache_write : Double
-} derive(Show, Eq)
+} derive(Show, Eq, ToJson, FromJson)
 
 ///| LLM 模型的完整定义，包含标识、能力、价格和上下文窗口等信息。
 pub(all) struct Model {
@@ -42,7 +42,7 @@ pub(all) struct Model {
   context_window : Int
   /// 最大输出 token 数
   max_tokens : Int
-} derive(Show)
+} derive(Show, Eq, ToJson, FromJson)
 
 // --- 已知 API 标识符 ---
 

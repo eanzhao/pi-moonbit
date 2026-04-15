@@ -6,7 +6,7 @@ pub(all) enum AgentThinkingLevel {
   Medium
   High
   XHigh
-} derive(Eq)
+} derive(Eq, ToJson, FromJson)
 
 ///| 多工具调用的执行模式。
 pub(all) enum ToolExecutionMode {
