@@ -1,63 +1,59 @@
 # pi-moonbit
 
-MoonBit reimplementation of [pi-mono](https://github.com/badlogic/pi-mono) — an AI agent toolkit.
+用 [MoonBit](https://www.moonbitlang.com/) 语言从零重建 [pi-mono](https://github.com/badlogic/pi-mono) —— 一个 AI 编程助手工具包。
 
-## What is this?
+## 这是什么？
 
-A learning project that rebuilds pi-mono's architecture in MoonBit, package by package:
+pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包。pi-moonbit 是它的 MoonBit 重写版，目的是：
 
-| Package | Status | Description |
-|---------|--------|-------------|
-| `lib/ai` | Planned | Unified multi-provider LLM API |
-| `lib/agent` | Planned | Agent loop, tool calling, state management |
-| `lib/tui` | Planned | Terminal UI with differential rendering |
-| `lib/coding_agent` | Planned | Coding agent with built-in tools and extensions |
-| `lib/web_ui` | Planned | Web chat UI components (WASM) |
-| `lib/mom` | Planned | Slack bot integration |
-| `lib/pods` | Planned | GPU pod management for vLLM |
+- **学 MoonBit** —— 通过造一个真实项目，掌握类型系统、trait、泛型、模式匹配等特性
+- **学架构** —— 逐包拆解重建，理解 AI Agent 从底层 LLM 调用到上层交互界面的完整设计
 
-## Why?
+## 当前进度
 
-- **Learn MoonBit** through a real-world, non-trivial project
-- **Understand pi-mono's architecture** by reimplementing it from scratch
-- **Explore MoonBit's strengths** in systems with complex type hierarchies (ADTs, traits, pattern matching)
+| 包 | 状态 | 说明 |
+|---|---|---|
+| `lib/ai` | 已完成 | 统一的多 LLM 提供商 API（消息类型、流式响应、Provider 注册） |
+| `lib/tui` | 已完成（核心） | 终端 UI 框架（组件系统、差分渲染） |
+| `lib/agent` | 待开发 | Agent 循环引擎、工具调用、状态管理 |
+| `lib/coding_agent` | 待开发 | 编码助手：内置工具、会话管理、扩展系统 |
+| `lib/web_ui` | 待开发 | Web 聊天界面（WASM） |
+| `lib/mom` | 待开发 | Slack 机器人集成 |
+| `lib/pods` | 待开发 | GPU Pod 管理 |
 
-## Prerequisites
+## 快速开始
 
-- [MoonBit toolchain](https://www.moonbitlang.com/download/) (v0.1.x+)
-
-## Build
+需要先安装 [MoonBit 工具链](https://www.moonbitlang.com/download/)。
 
 ```bash
-moon check    # Type check
-moon build    # Build
-moon test     # Run tests
+moon check          # 类型检查
+moon build          # 编译
+moon test           # 运行所有测试
+moon test lib/ai    # 运行某个包的测试
 ```
 
-## Project Structure
+## 项目结构
 
 ```
 pi-moonbit/
-├── moon.mod.json         # Module definition
-├── docs/                 # Architecture docs (one per implementation phase)
-│   └── 00-project-overview.md
-├── lib/                  # Library packages
-│   ├── ai/               # LLM provider abstraction
-│   ├── agent/            # Agent loop engine
-│   ├── tui/              # Terminal UI library
-│   ├── coding_agent/     # Coding agent core
-│   └── ...
-└── src/                  # Executables
-    └── main/             # CLI entry point
+├── moon.mod.json       # 模块定义
+├── docs/               # 架构文档（每个阶段一篇）
+├── lib/                # 库代码
+│   ├── ai/             # LLM Provider 抽象层
+│   ├── tui/            # 终端 UI 库
+│   └── ...             # 其余待开发
+└── pi-mono/            # 原始 TypeScript 实现（只读参考，不修改）
 ```
 
-## Docs
+## 架构文档
 
-Each implementation phase has a corresponding document in `docs/`:
+每个开发阶段对应 `docs/` 下的一篇文档：
 
-- [00 - Project Overview](docs/00-project-overview.md) — Architecture analysis and implementation plan
+- [00 - 项目总览](docs/00-project-overview.md)
+- [01 - LLM API 层](docs/01-ai.md)
+- [02 - 终端 UI 层](docs/02-tui.md)
 
-## Reference
+## 参考
 
-- [pi-mono](https://github.com/badlogic/pi-mono) — Original TypeScript implementation
-- [MoonBit docs](https://docs.moonbitlang.com/) — Language reference
+- [pi-mono](https://github.com/badlogic/pi-mono) —— 原始 TypeScript 实现
+- [MoonBit 文档](https://docs.moonbitlang.com/) —— 语言参考

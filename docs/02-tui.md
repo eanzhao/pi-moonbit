@@ -103,6 +103,85 @@ tui.handle_input("some key")              // 把输入转发给焦点组件
 
 终端里的字符不都是一样宽的（中文占 2 列，ANSI 控制码不占列）。本阶段先用简化规则：普通字符算 1 列，`\t` 算 4 列，不处理 ANSI 和 Unicode 宽度。够用了，后续按需加强。
 
+工具函数（`utils.mbt`）提供：`visible_width`（计算可见宽度）、`truncate_to_width`（按宽度截断）、`wrap_lines`（自动换行）、`fit_to_width`（补齐到指定宽度）、`spaces`（生成空格串）。
+
+### 按键事件（KeyEvent）
+
+`keys.mbt` 将原始终端输入解析为稳定的按键事件：
+
+```moonbit
+enum KeyEvent {
+  Enter | Escape | Backspace | Delete
+  Up | Down | Left | Right | Home | End
+  TextInput(String)       // 普通可打印字符
+  Unsupported(String)     // 无法识别的输入
+}
+```
+
+`parse_key_event(input)` 覆盖了 Input 组件需要的最小按键集合（方向键、编辑键、Enter/Escape 等）。当前未实现 Kitty 协议，只处理常见的 ANSI 转义序列。
+
+### 内置组件详解
+
+#### Text（纯文本）
+
+最基础的组件，给定宽度和文本内容，返回渲染后的行。长文本会自动换行。
+
+#### Spacer（占位空白）
+
+返回指定行数的空行，用于在组件之间制造间距。
+
+#### Box（带内边距的容器）
+
+给子组件统一加 padding，可选对整行应用背景函数（如 ANSI 颜色转义）：
+
+```moonbit
+let box = Box::new(padding_x=2, padding_y=1)
+box.add_child(text_component)
+box.set_bg_fn(fn(line) { "\x1b[44m" + line + "\x1b[0m" })  // 蓝色背景
+```
+
+#### TruncatedText（单行截断文本）
+
+只渲染第一行内容，多余部分按宽度截断。适合标题、状态栏等单行展示场景。
+
+#### Input（单行输入框）
+
+支持文本插入、左右移动、Home/End、Backspace/Delete、Enter 提交、Escape 取消。聚焦时显示 `|` 光标，失焦时隐藏。通过 `set_focused` 同步焦点状态：
+
+```moonbit
+let input = Input::new("placeholder")
+input.set_submit_handler(fn(value) { println("submitted: " + value) })
+input.set_escape_handler(fn() { println("cancelled") })
+```
+
+当文本超出可见宽度时，会自动滚动显示窗口，确保光标始终可见。
+
+#### Loader（加载指示器）
+
+通过 Braille 字符动画（⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏）展示加载状态。需要外部定时调用 `tick()` 推进动画帧：
+
+```moonbit
+let loader = Loader::new(message="Thinking...")
+loader.tick()   // 推进一帧
+loader.set_message("Processing...")  // 更新消息
+```
+
+#### SelectList（可过滤的选择列表）
+
+支持按 `value` 前缀做大小写不敏感过滤、上下循环导航、Home/End 跳转、Enter 确认、Escape 取消。可配置最大可见行数，超出时自动滚动：
+
+```moonbit
+let list = SelectList::new(
+  [{ value: "a", label: "Option A", description: "First option" }],
+  max_visible=5,
+)
+list.set_filter("opt")            // 过滤
+list.set_select_handler(fn(item) { println("selected: " + item.label) })
+list.set_selection_change_handler(fn(item) { println("highlighted: " + item.label) })
+```
+
+每个列表项有 `value`（标识符）、`label`（显示文本）、`description`（可选描述）。当终端宽度 > 40 时，描述会显示在标签右侧。
+
 ## 文件结构
 
 ```
@@ -151,9 +230,20 @@ pi-mono 原版的差分渲染精确到单个行段，实现很复杂。本阶段
 | 真实终端实现（进程控制、ANSI 转义） | 先用 MemoryTerminal 验证架构 |
 | 精确差分（行段级别） | 先用简化策略，够用 |
 | ANSI 样式、emoji、东亚宽字符处理 | 先用简化宽度模型 |
-| Kitty 键盘协议 | 先用原始字符串转发 |
+| Kitty 键盘协议 | 先用最小 ANSI 按键解析 |
 | 高级组件（Editor、Markdown 等） | 先把当前 CLI 真正需要的最小组件补齐 |
 | overlay、IME、图片协议 | 暂不需要 |
+
+## 测试覆盖
+
+本阶段测试聚焦于最核心的能力：
+
+- **diff_test.mbt**：差分算法是否能正确产出 `Noop / Full / Update`（相同帧、空帧、单行变化、多行变化、帧变短需清尾部等场景）
+- **components_test.mbt**：基础组件（Text、Spacer、Box、TruncatedText、Loader、SelectList）是否能按宽度正确渲染
+- **input_test.mbt**：Input 组件的编辑键（Backspace、Delete、Home、End、左右）、文本插入、提交/取消回调、光标滚动窗口
+- **loader_test.mbt**：Loader 动画帧推进和消息更新
+- **select_list_test.mbt**：SelectList 的过滤、导航、回调
+- **tui_test.mbt**：TUI 是否能把组件树渲染到终端，并把输入转发给聚焦组件
 
 ## 后续可以加强的方向
 

@@ -1,66 +1,54 @@
 # AGENTS.md — pi-moonbit
 
-> AI agent guidance for working on this repository. See also [CLAUDE.md](CLAUDE.md).
+> AI 助手工作指南。详细版见 [CLAUDE.md](CLAUDE.md)。
 
-## What is pi-moonbit?
+## 这是什么？
 
-A MoonBit reimplementation of [pi-mono](https://github.com/badlogic/pi-mono), the AI agent
-toolkit by Mario Zechner. This is a study project: learn MoonBit by rebuilding a real-world
-AI coding agent from scratch.
+用 MoonBit 重写 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）。学习项目。
 
-## For AI Agents Working on This Repo
-
-### Build & Test
+## 构建 & 测试
 
 ```bash
-moon check          # Type check all packages
-moon build          # Build
-moon test           # Run all tests
-moon test lib/ai    # Run tests for a specific package
+moon check          # 类型检查
+moon build          # 编译
+moon test           # 全部测试
+moon test lib/ai    # 指定包测试
 ```
 
-### Reference Material
+## 实现规则
 
-- `pi-mono/` contains the original TypeScript implementation (gitignored, read-only)
-- `docs/` contains numbered architecture documents explaining each phase
-- When implementing a package, read the corresponding pi-mono source first:
-  - `lib/ai` → `pi-mono/packages/ai/src/`
-  - `lib/agent` → `pi-mono/packages/agent/src/`
-  - etc.
+1. **按依赖顺序**：ai、tui（并行） → agent → coding_agent → main
+2. **每阶段一篇 doc + 一次 commit**：`docs/NN-*.md`
+3. **先读 pi-mono 源码再实现**：`lib/ai` ←→ `pi-mono/packages/ai/src/`
+4. **不要修改 `pi-mono/` 下的任何文件**
+5. **MoonBit 风格**：数据用 `struct`，联合类型用 `enum`，行为用 `trait`，错误用 `Result`
+6. **每个包都要有 `*_test.mbt` 测试**
+7. **编译目标**：Native 为主，仅 web_ui 用 WASM
 
-### Implementation Rules
+## 包结构
 
-1. **Follow the dependency order**: ai, tui (parallel leaves) → agent → coding_agent → main
-2. **One doc + one commit per phase**: each phase adds a `docs/NN-*.md` and the implementation
-3. **MoonBit idioms over TypeScript transliteration**:
-   - Use `struct` for data-only types (options, config, results)
-   - Use `enum` (ADT) for closed discriminated unions (Message, Event, StopReason)
-   - Use `trait` / `pub(open) trait` for behavioral abstractions (Provider, Component)
-   - Use newtype wrappers (`type ApiId String`) for open/extensible identifiers
-   - Use `Result[T, E]` for error handling
-   - Use pattern matching
-4. **Tests**: every package should have `*_test.mbt` files with `test` blocks
-5. **Do not modify** anything under `pi-mono/` — it is the read-only reference
-6. **Target**: Native (primary), WASM only for web_ui
-
-### Package Structure
-
-Each package under `lib/` follows this layout:
+每个包遵循统一布局：
 
 ```
-lib/ai/
-├── moon.pkg          # Package manifest (dependencies, etc.)
-├── types.mbt         # Core type definitions
-├── provider.mbt      # Provider trait and implementations
-├── stream.mbt        # Streaming API
-├── *_test.mbt        # Tests
-└── ...
+lib/<package>/
+├── moon.pkg          # 包配置（依赖等）
+├── types.mbt         # 核心类型定义
+├── <module>.mbt      # 功能模块
+└── *_test.mbt        # 测试
 ```
 
-### Naming Conventions
+## 命名规范
 
-- Packages: `snake_case` (e.g., `coding_agent`)
-- Types/Enums: `PascalCase` (e.g., `Message`, `StopReason`)
-- Functions/methods: `snake_case` (e.g., `stream_simple`)
-- Constants: `snake_case` or `UPPER_CASE`
-- Test names: descriptive strings in `test "..."` blocks
+- 包名：`snake_case`（如 `coding_agent`）
+- 类型/Enum：`PascalCase`（如 `Message`、`StopReason`）
+- 函数/方法：`snake_case`（如 `stream_simple`）
+- 常量：`snake_case`（如 `api_anthropic_messages`）
+- 测试：`test "描述性文字"` 块
+
+## 提交格式
+
+```
+feat(ai): add Message enum and Provider trait
+docs(00): project overview and architecture plan
+feat(agent): implement agent loop with tool calling
+```
