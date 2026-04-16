@@ -335,6 +335,14 @@ pub fn run_mom_host_input(
   host.step_with_callbacks(input, callbacks)
 }
 
+pub fn[T : MomEventHandleRuntime] run_mom_host_input_with_handle_runtime(
+  host : MomInMemoryHost,
+  input : MomHostInput,
+  runtime : T
+) -> Result[MomHostStep, MomHostStepError] {
+  run_mom_host_input(host, input, mom_host_callbacks_from_handle_runtime(runtime))
+}
+
 pub fn run_mom_host_input_with_callbacks(
   host : MomInMemoryHost,
   input : MomHostInput,

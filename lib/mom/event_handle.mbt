@@ -180,6 +180,17 @@ pub fn MomHostCallbacks::new(
   }
 }
 
+pub fn[T : MomEventHandleRuntime] mom_host_callbacks_from_handle_runtime(
+  runtime : T
+) -> MomHostCallbacks {
+  MomHostCallbacks::new(
+    fn(watched_dir) { runtime.set_watch_dir(watched_dir) },
+    fn(due_at_ms) { runtime.set_wakeup_due_at_ms(due_at_ms) },
+    fn(entry) { runtime.register_periodic(entry) },
+    fn(filename) { runtime.remove_periodic(filename) },
+  )
+}
+
 pub fn MomHostCallbacks::runtime(
   self : MomHostCallbacks
 ) -> CallbackEventHandleRuntime {

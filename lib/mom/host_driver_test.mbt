@@ -191,3 +191,58 @@ test "host driver exposes event workspace mutation helpers" {
   assert_true(driver.delete_event_file("future.json"))
   assert_eq(driver.list_event_files().length(), 0)
 }
+
+test "run mom host input with handle runtime bridges directly" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[{
+      filename: "future.json",
+      content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      modified_at: None,
+    }],
+  )
+  let runtime = InMemoryEventHandleRuntime::new()
+
+  let step = run_mom_host_input_with_handle_runtime(
+    host,
+    Sync("2026-04-17T09:00:00+08:00"),
+    runtime,
+  ).unwrap()
+
+  match step.result {
+    Synced(sync) => assert_eq(sync.sync.changed_plans.length(), 1)
+    _ => fail("expected sync result")
+  }
+  assert_eq(runtime.snapshot().wakeup_due_at_ms, Some(parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap()))
+  assert_eq(runtime.list_operations().length(), 2)
+}
+
+test "host driver can be built directly from handle runtime" {
+  let runtime = InMemoryEventHandleRuntime::new()
+  let driver = MomHostDriver::new_in_memory_with_handle_runtime(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    runtime,
+    event_files=[{
+      filename: "daily.json",
+      content: "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      modified_at: None,
+    }],
+  )
+
+  let step = driver.sync("2026-04-17T09:00:00+08:00").unwrap()
+
+  match step.result {
+    Synced(sync) => assert_eq(sync.sync.changed_plans.length(), 1)
+    _ => fail("expected sync result")
+  }
+  assert_eq(runtime.snapshot().registered_periodics.length(), 1)
+  assert_eq(runtime.snapshot().registered_periodics[0].filename, "daily.json")
+}

@@ -5,6 +5,13 @@ pub fn MomHostDriver::new(
   { host: Ref::new(host), callbacks }
 }
 
+pub fn[T : MomEventHandleRuntime] MomHostDriver::new_with_handle_runtime(
+  host : MomInMemoryHost,
+  runtime : T
+) -> MomHostDriver {
+  MomHostDriver::new(host, mom_host_callbacks_from_handle_runtime(runtime))
+}
+
 pub fn MomHostDriver::new_in_memory(
   config : MomAgentConfig,
   adapter_name : String,
@@ -26,6 +33,30 @@ pub fn MomHostDriver::new_in_memory(
       event_files~,
     ),
     callbacks,
+  )
+}
+
+pub fn[T : MomEventHandleRuntime] MomHostDriver::new_in_memory_with_handle_runtime(
+  config : MomAgentConfig,
+  adapter_name : String,
+  channels : Array[ChannelInfo],
+  users : Array[UserInfo],
+  started_at : String,
+  runtime : T,
+  debounce_ms? : UInt64 = 100UL,
+  event_files? : Array[MomEventFile] = []
+) -> MomHostDriver {
+  MomHostDriver::new_with_handle_runtime(
+    MomInMemoryHost::new(
+      config,
+      adapter_name,
+      channels,
+      users,
+      started_at,
+      debounce_ms~,
+      event_files~,
+    ),
+    runtime,
   )
 }
 
