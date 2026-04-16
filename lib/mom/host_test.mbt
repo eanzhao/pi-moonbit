@@ -358,3 +358,104 @@ test "run mom host input with callbacks surfaces handle apply failures" {
     _ => fail("expected callback apply failure")
   }
 }
+
+test "in-memory host step_with_callbacks accepts callback bundle" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[{
+      filename: "future.json",
+      content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      modified_at: None,
+    }],
+  )
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let callbacks = MomHostCallbacks::new(
+    fn(watched_dir) {
+      operations.val.push(SetWatchDir(watched_dir))
+      Ok(())
+    },
+    fn(due_at_ms) {
+      operations.val.push(SetWakeup(due_at_ms))
+      Ok(())
+    },
+    fn(entry) {
+      operations.val.push(RegisterPeriodic(entry))
+      Ok(())
+    },
+    fn(filename) {
+      operations.val.push(RemovePeriodic(filename))
+      Ok(())
+    },
+  )
+
+  let step = host.step_with_callbacks(
+    Sync("2026-04-17T09:00:00+08:00"),
+    callbacks,
+  ).unwrap()
+
+  assert_eq(step.handle_operations.length(), 2)
+  assert_eq(operations.val.length(), 2)
+  match operations.val[0] {
+    SetWatchDir(Some(path)) => assert_eq(path, "/workspace/events")
+    _ => fail("expected watch dir callback")
+  }
+  match operations.val[1] {
+    SetWakeup(Some(value)) =>
+      assert_eq(value, parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap())
+    _ => fail("expected wakeup callback")
+  }
+}
+
+test "run mom host input accepts callback bundle" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[{
+      filename: "daily.json",
+      content: "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      modified_at: None,
+    }],
+  )
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let callbacks = MomHostCallbacks::new(
+    fn(watched_dir) {
+      operations.val.push(SetWatchDir(watched_dir))
+      Ok(())
+    },
+    fn(due_at_ms) {
+      operations.val.push(SetWakeup(due_at_ms))
+      Ok(())
+    },
+    fn(entry) {
+      operations.val.push(RegisterPeriodic(entry))
+      Ok(())
+    },
+    fn(filename) {
+      operations.val.push(RemovePeriodic(filename))
+      Ok(())
+    },
+  )
+
+  let step = run_mom_host_input(
+    host,
+    Sync("2026-04-17T09:00:00+08:00"),
+    callbacks,
+  ).unwrap()
+
+  match step.result {
+    Synced(sync) => assert_eq(sync.sync.changed_plans.length(), 1)
+    _ => fail("expected sync result")
+  }
+  assert_eq(operations.val.length(), 2)
+  match operations.val[1] {
+    RegisterPeriodic(entry) => assert_eq(entry.filename, "daily.json")
+    _ => fail("expected periodic registration callback")
+  }
+}

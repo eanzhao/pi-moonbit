@@ -166,6 +166,31 @@ pub fn CallbackEventHandleRuntime::new(
   }
 }
 
+pub fn MomHostCallbacks::new(
+  set_watch_dir_fn : (String?) -> Result[Unit, String],
+  set_wakeup_due_at_ms_fn : (UInt64?) -> Result[Unit, String],
+  register_periodic_fn : (MomRegisteredPeriodic) -> Result[Unit, String],
+  remove_periodic_fn : (String) -> Result[Unit, String]
+) -> MomHostCallbacks {
+  {
+    set_watch_dir_fn,
+    set_wakeup_due_at_ms_fn,
+    register_periodic_fn,
+    remove_periodic_fn,
+  }
+}
+
+pub fn MomHostCallbacks::runtime(
+  self : MomHostCallbacks
+) -> CallbackEventHandleRuntime {
+  CallbackEventHandleRuntime::new(
+    self.set_watch_dir_fn,
+    self.set_wakeup_due_at_ms_fn,
+    self.register_periodic_fn,
+    self.remove_periodic_fn,
+  )
+}
+
 pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with set_watch_dir(self, watched_dir) {
   self.watched_dir = watched_dir
   self.operations.push(SetWatchDir(watched_dir))

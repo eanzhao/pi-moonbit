@@ -319,6 +319,22 @@ pub fn[T : MomEventHandleRuntime] MomInMemoryHost::step_with_handle_runtime(
   }
 }
 
+pub fn MomInMemoryHost::step_with_callbacks(
+  self : MomInMemoryHost,
+  input : MomHostInput,
+  callbacks : MomHostCallbacks
+) -> Result[MomHostStep, MomHostStepError] {
+  self.step_with_handle_runtime(input, callbacks.runtime())
+}
+
+pub fn run_mom_host_input(
+  host : MomInMemoryHost,
+  input : MomHostInput,
+  callbacks : MomHostCallbacks
+) -> Result[MomHostStep, MomHostStepError] {
+  host.step_with_callbacks(input, callbacks)
+}
+
 pub fn run_mom_host_input_with_callbacks(
   host : MomInMemoryHost,
   input : MomHostInput,
@@ -327,13 +343,13 @@ pub fn run_mom_host_input_with_callbacks(
   register_periodic_fn : (MomRegisteredPeriodic) -> Result[Unit, String],
   remove_periodic_fn : (String) -> Result[Unit, String]
 ) -> Result[MomHostStep, MomHostStepError] {
-  let runtime = CallbackEventHandleRuntime::new(
+  let callbacks = MomHostCallbacks::new(
     set_watch_dir_fn,
     set_wakeup_due_at_ms_fn,
     register_periodic_fn,
     remove_periodic_fn,
   )
-  host.step_with_handle_runtime(input, runtime)
+  run_mom_host_input(host, input, callbacks)
 }
 
 fn in_memory_event_workspace_get(
