@@ -375,6 +375,19 @@ pub(all) struct MomHostDriver {
   callbacks : MomHostCallbacks
 }
 
+pub(all) struct MomHostRuntime {
+  step_fn : (MomHostInput) -> Result[MomHostStep, MomHostStepError]
+  events_dir_fn : () -> String
+  next_due_at_ms_fn : () -> UInt64?
+  list_pending_file_changes_fn : () -> Array[MomPendingEventFile]
+  handle_state_fn : () -> MomEventHandleState
+  write_event_fn : (String, MomEvent, String?) -> Unit
+  delete_event_file_fn : (String) -> Bool
+  clear_file_change_fn : (String) -> Bool
+  list_event_files_fn : () -> Array[MomEventFile]
+  list_sent_messages_fn : () -> Array[AdapterSentMessage]
+}
+
 pub(all) enum MomHostInput {
   Sync(String)
   Message(ChannelMessage)
