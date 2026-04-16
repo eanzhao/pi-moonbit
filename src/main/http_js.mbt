@@ -105,6 +105,60 @@ extern "js" fn host_fetch_sse_ffi(url : String, body : String, api_key : String,
   #|  }
   #|}
 
+///| 发起 Anthropic Messages API 流式请求并通过 EventHandler 推送事件。
+fn host_anthropic_stream(
+  model : @ai.Model,
+  context : @ai.Context,
+  options : @ai.StreamOptions,
+  handler : @ai.EventHandler
+) -> Unit!@ai.StreamError {
+  let base_url = match model.base_url {
+    Some(url) => url
+    None => "https://api.anthropic.com"
+  }
+  let url = if base_url.has_suffix("/") {
+    base_url + "v1/messages"
+  } else {
+    base_url + "/v1/messages"
+  }
+  let api_key = match options.api_key {
+    Some(key) => key
+    None => host_env_var("ANTHROPIC_API_KEY").unwrap_or("")
+  }
+  let body = @ai.build_anthropic_request_body(model, context, options)
+  let extra_headers = Json::object({
+    "x-api-key": Json::string(api_key),
+    "anthropic-version": Json::string("2023-06-01"),
+  })
+  let result = host_fetch_sse_ffi(
+    url,
+    body.stringify(escape_slash=false),
+    "",
+    extra_headers.stringify(escape_slash=false),
+  )
+  if result.length() == 0 {
+    raise @ai.StreamError("empty response from Anthropic")
+  }
+  if result[0] == "err" {
+    let message = if result.length() > 1 { result[1] } else { "unknown error" }
+    raise @ai.StreamError(message)
+  }
+  let state = @ai.AnthropicStreamState::new(model)
+  let mut current_event_type = ""
+  for i = 1; i < result.length(); i = i + 1 {
+    let line = result[i].trim().to_string()
+    if line.has_prefix("event:") {
+      current_event_type = line[6:].trim().to_string()
+    } else if line.has_prefix("data:") {
+      let data = line[5:].trim().to_string()
+      let events = @ai.parse_anthropic_sse_event(current_event_type, data, state)
+      for event in events {
+        handler.0(event)
+      }
+    }
+  }
+}
+
 ///| 发起 OpenAI 兼容的 SSE 流式请求并通过 EventHandler 推送事件。
 fn host_openai_stream(
   model : @ai.Model,

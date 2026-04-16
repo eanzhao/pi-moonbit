@@ -13,6 +13,7 @@ pub fn parse_cli_args(
   let mut model_id = "mock-cli"
   let mut provider_id = "openai"
   let mut api_id = "openai-responses"
+  let mut base_url : String? = None
   let mut thinking_level = @agent.AgentThinkingLevel::Off
   let messages : Array[String] = []
 
@@ -72,6 +73,12 @@ pub fn parse_cli_args(
       }
       i = i + 1
       api_id = argv[i]
+    } else if arg == "--base-url" {
+      guard i + 1 < argv.length() else {
+        return Err("missing value for --base-url")
+      }
+      i = i + 1
+      base_url = Some(argv[i])
     } else if arg == "--thinking" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --thinking")
@@ -127,7 +134,7 @@ pub fn parse_cli_args(
     continue_session,
     resume_session,
     cwd: effective_cwd,
-    model: cli_model(model_id, provider_id, api_id, thinking_level),
+    model: cli_model(model_id, provider_id, api_id, base_url, thinking_level),
     thinking_level,
     messages,
   }))
@@ -156,7 +163,8 @@ pub fn cli_help_text() -> String {
     "  --cwd <path>               Override working directory for tools",
     "  --model <id>               Set model id",
     "  --provider <id>            Set provider id",
-    "  --api <id>                 Set API id",
+    "  --api <id>                 Set API id (openai-responses, anthropic-messages, etc.)",
+    "  --base-url <url>           Override LLM API base URL",
     "  --thinking <level>         off|minimal|low|medium|high|xhigh",
     "",
     "Interactive commands:",
@@ -205,6 +213,7 @@ fn cli_model(
   model_id : String,
   provider_id : String,
   api_id : String,
+  base_url : String?,
   thinking_level : @agent.AgentThinkingLevel
 ) -> @ai.Model {
   {
@@ -212,7 +221,7 @@ fn cli_model(
     name: model_id,
     api: @ai.ApiId(api_id),
     provider: @ai.ProviderId(provider_id),
-    base_url: None,
+    base_url,
     reasoning: thinking_level != @agent.AgentThinkingLevel::Off,
     input_modalities: [@ai.InputModality::Text],
     cost: { input: 0.0, output: 0.0, cache_read: 0.0, cache_write: 0.0 },

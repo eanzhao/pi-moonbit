@@ -50,7 +50,11 @@ fn create_cli_app(
             None =>
               session.agent.set_stream_fn(@agent.AgentStreamFn(fn(model, context, options, handler) {
                 try {
-                  host_openai_stream(model, context, options, handler)
+                  if model.api == @ai.api_anthropic_messages {
+                    host_anthropic_stream(model, context, options, handler)
+                  } else {
+                    host_openai_stream(model, context, options, handler)
+                  }
                   Ok(())
                 } catch {
                   @ai.StreamError(message) => Err(message)
