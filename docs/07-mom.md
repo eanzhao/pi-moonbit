@@ -20,7 +20,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)` / `dispatch_periodic(...)`
 - `event_handle.mbt`：把 event loop 当前状态翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态、操作序列与 apply helper
 - `runner.mbt`：把 adapter turn、event loop、handle runtime sync 收成统一的宿主入口
-- `host.mbt`：提供 `InMemoryEventWorkspace`、`MomInMemoryHost`、`MomHostInput` / `MomHostResult`，把 mock/CLI 宿主常用拼装收成即用型对象，并统一 message / file change / wakeup / periodic callback 入口
+- `host.mbt`：提供 `InMemoryEventWorkspace`、`MomInMemoryHost`、`MomHostInput` / `MomHostResult` / `MomHostStep`，把 mock/CLI 宿主常用拼装收成即用型对象，并统一 message / file change / wakeup / periodic callback 入口与 per-step callback delta
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -221,7 +221,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 68 个测试，覆盖这些主线：
+`lib/mom` 当前新增 70 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -298,6 +298,7 @@ pub(all) enum MomEvent {
 - host `message / file change / sync / wakeup / periodic callback` 都可以通过统一 `handle_input(...)` 入口走同一套 runner 编排
 - in-memory event workspace 会正确保留 future event、清理 consumed immediate event
 - `mom_host_result_handle_plan(...)` 会只对真正推进 runner 状态的输入暴露 handle plan
+- `step(...)` 会把一次宿主输入对应的 handle delta 一起返回，并在每步后 drain 已消费的 callback op
 
 ### event_loop_test.mbt
 
@@ -335,7 +336,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、in-memory host 拼装、统一 host step API、trigger dispatch、periodic callback dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、in-memory host 拼装、统一 host step API、per-step callback delta、trigger dispatch、periodic callback dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 

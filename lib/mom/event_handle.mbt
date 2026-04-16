@@ -126,6 +126,14 @@ pub fn InMemoryEventHandleRuntime::list_operations(
   self.operations.copy()
 }
 
+pub fn InMemoryEventHandleRuntime::drain_operations(
+  self : InMemoryEventHandleRuntime
+) -> Array[MomEventHandleOp] {
+  let drained = self.operations.copy()
+  self.operations = []
+  drained
+}
+
 pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with set_watch_dir(self, watched_dir) {
   self.watched_dir = watched_dir
   self.operations.push(SetWatchDir(watched_dir))

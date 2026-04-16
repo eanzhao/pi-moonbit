@@ -181,6 +181,18 @@ pub fn MomInMemoryHost::handle_state(self : MomInMemoryHost) -> MomEventHandleSt
   self.handle_runtime.snapshot()
 }
 
+pub fn MomInMemoryHost::list_handle_operations(
+  self : MomInMemoryHost
+) -> Array[MomEventHandleOp] {
+  self.handle_runtime.list_operations()
+}
+
+pub fn MomInMemoryHost::drain_handle_operations(
+  self : MomInMemoryHost
+) -> Array[MomEventHandleOp] {
+  self.handle_runtime.drain_operations()
+}
+
 pub fn MomInMemoryHost::list_sent_messages(
   self : MomInMemoryHost
 ) -> Array[AdapterSentMessage] {
@@ -277,6 +289,19 @@ pub fn mom_host_result_handle_plan(
     PeriodicDispatched(periodic) => Some(periodic.handle_plan)
     FileQueued(_) => None
   }
+}
+
+pub fn MomInMemoryHost::step(
+  self : MomInMemoryHost,
+  input : MomHostInput
+) -> Result[MomHostStep, MomRunnerError] {
+  let result = match self.handle_input(input) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let handle_plan = mom_host_result_handle_plan(result)
+  let handle_operations = self.drain_handle_operations()
+  Ok({ result, handle_plan, handle_operations })
 }
 
 fn in_memory_event_workspace_get(

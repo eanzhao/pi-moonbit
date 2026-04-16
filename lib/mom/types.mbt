@@ -372,6 +372,12 @@ pub(all) enum MomHostResult {
   PeriodicDispatched(MomRunnerPeriodicResult)
 } derive(Eq)
 
+pub(all) struct MomHostStep {
+  result : MomHostResult
+  handle_plan : MomEventHandlePlan?
+  handle_operations : Array[MomEventHandleOp]
+} derive(Eq)
+
 pub(open) trait MomEventHandleRuntime {
   set_watch_dir(Self, String?) -> Result[Unit, String]
   set_wakeup_due_at_ms(Self, UInt64?) -> Result[Unit, String]

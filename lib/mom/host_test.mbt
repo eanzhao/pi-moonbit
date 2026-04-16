@@ -181,3 +181,90 @@ test "mom host result helper skips queued file changes" {
   assert_eq(host.list_pending_file_changes().length(), 1)
   assert_eq(host.list_pending_file_changes()[0].filename, "future.json")
 }
+
+test "in-memory host step returns sync handle delta" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[
+      {
+        filename: "future.json",
+        content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+        modified_at: None,
+      },
+      {
+        filename: "daily.json",
+        content: "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+        modified_at: None,
+      },
+    ],
+  )
+
+  let step = host.step(Sync("2026-04-17T09:00:00+08:00")).unwrap()
+
+  match step.result {
+    Synced(sync) => assert_eq(sync.sync.changed_plans.length(), 2)
+    _ => fail("expected sync result")
+  }
+  match step.handle_plan {
+    Some(plan) => {
+      assert_true(plan.has_changes())
+      assert_eq(
+        plan.state.wakeup_due_at_ms,
+        Some(parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap()),
+      )
+      assert_eq(plan.state.registered_periodics.length(), 1)
+    }
+    None => fail("expected handle plan")
+  }
+  assert_eq(step.handle_operations.length(), 3)
+  match step.handle_operations[0] {
+    SetWatchDir(Some(path)) => assert_eq(path, "/workspace/events")
+    _ => fail("expected watch dir op")
+  }
+  match step.handle_operations[1] {
+    SetWakeup(Some(value)) =>
+      assert_eq(value, parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap())
+    _ => fail("expected wakeup op")
+  }
+  match step.handle_operations[2] {
+    RegisterPeriodic(entry) => assert_eq(entry.filename, "daily.json")
+    _ => fail("expected periodic registration")
+  }
+}
+
+test "in-memory host step drains prior handle operations" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[{
+      filename: "future.json",
+      content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      modified_at: None,
+    }],
+  )
+
+  let first = host.step(Sync("2026-04-17T09:00:00+08:00")).unwrap()
+  assert_eq(first.handle_operations.length(), 2)
+
+  let second = host.step(FileChanged("future.json", 1_000UL)).unwrap()
+
+  match second.result {
+    FileQueued(pending) => {
+      assert_eq(pending.length(), 1)
+      assert_eq(pending[0].filename, "future.json")
+    }
+    _ => fail("expected queued file change")
+  }
+  match second.handle_plan {
+    None => ()
+    Some(_) => fail("expected no handle plan")
+  }
+  assert_eq(second.handle_operations.length(), 0)
+}
