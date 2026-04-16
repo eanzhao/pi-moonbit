@@ -7,7 +7,7 @@
 pi-moonbit 是 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）的 MoonBit 重写。
 `pi-mono/` 目录是原始 TypeScript 代码（只读，不要修改）。
 
-**当前状态**：核心路径（Phase 01-05）已完成，55 个源文件、7200+ 行代码、67 个测试全部通过。
+**当前状态**：核心路径（Phase 01-06）已完成，89 个测试全部通过。
 
 ## 工具链
 
@@ -28,7 +28,7 @@ pi-moonbit/
 │   ├── tui/            # Phase 02 — 终端 UI 库
 │   ├── agent/          # Phase 03 — Agent 引擎
 │   ├── coding_agent/   # Phase 04 — 编码助手核心
-│   ├── web_ui/         # (待开发) Web UI
+│   ├── web_ui/         # Phase 06 — Web UI 支撑层
 │   ├── mom/            # (待开发) Slack 集成
 │   └── pods/           # (待开发) GPU Pod 管理
 ├── src/main/           # Phase 05 — CLI 入口（JS target 可运行）
@@ -43,7 +43,8 @@ pi-moonbit/
 | 02 | `lib/tui` | Component trait, 差分渲染, Container/Input/SelectList/Loader 等组件 |
 | 03 | `lib/agent` | Agent 回合循环, 工具三阶段执行, 事件系统, steering/follow-up 队列 |
 | 04 | `lib/coding_agent` | append-only 会话树, 分支/compaction, 扩展钩子, read/write/edit/bash 工具 |
-| 05 | `src/main` | CLI 参数解析, JSONL session 持久化, Print/REPL 模式, JS host FFI |
+| 05 | `src/main` | CLI 参数解析, 多 session JSONL 持久化, continue/resume, Print/REPL 模式, JS host FFI |
+| 06 | `lib/web_ui` | Web transcript, storage/store, proxy/format, model selector, custom provider 支撑层 |
 
 ## MoonBit 编码规范
 
