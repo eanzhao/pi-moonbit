@@ -1,8 +1,8 @@
-# 07 - Mom 支撑层：lib/mom
+# 07 - Mom 运行层：lib/mom
 
 ## 这一阶段做了什么？
 
-phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker 执行器原样搬过来，而是先把 MoonBit 最适合承接、也最容易测试的那层稳定抽象落成了一个新的 `lib/mom` 包：
+phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker 执行器原样搬过来，而是先把 MoonBit 最适合承接、也最容易测试的那层平台无关运行层落成了一个新的 `lib/mom` 包：
 
 - 统一 channel / user / attachment / message 数据模型
 - 平台无关的 workspace 路径规划与 channel namespace 规则
@@ -12,6 +12,10 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - events JSON 解析、序列化与触发消息格式化
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
+- `MomAgentRuntime` / `MomAgentConfig` 运行时装配
+- `MomAgent`：按 `adapter/channel` 复用 `AgentSession`
+- channel 消息驱动 `coding_agent.AgentSession` 执行，并把 assistant 回复回写到 log
+- `@agent.AgentEvent` 透传与运行状态跟踪
 
 对应源码：
 
@@ -24,14 +28,16 @@ lib/mom/
 ├── sandbox.mbt
 ├── events.mbt
 ├── prompt.mbt
+├── agent.mbt
 ├── store_test.mbt
 ├── context_test.mbt
 ├── sandbox_test.mbt
 ├── events_test.mbt
-└── prompt_test.mbt
+├── prompt_test.mbt
+└── agent_test.mbt
 ```
 
-这意味着仓库现在已经有了 mom 的“核心支撑层”，而不再只是 README 里的一个待开发占位包。
+这意味着仓库现在已经有了 mom 的“平台无关运行层”，而不再只是 README 里的一个待开发占位包。
 
 ## 为什么不先硬接 Slack？
 
@@ -91,13 +97,26 @@ pub(all) enum MomEvent {
 
 ## 这层怎么接已有 coding-agent？
 
-这阶段最关键的桥接点是 `context.mbt`：
+这阶段最关键的桥接点有两处。
+
+第一处是 `context.mbt`：
 
 - `channel_message_to_context_text(...)` 把 channel 消息转成标准 user text
 - `channel_message_to_user_message(...)` 把它映射为 `@ai.UserMessage`
 - `sync_channel_log_to_session_manager(...)` 把未同步的非 bot 消息补进 `SessionManager`
 
 这样 mom 不需要自己重新发明一套上下文树；它直接复用 phase 04 已经实现好的 append-only session 和 context build 逻辑。
+
+第二处是 `agent.mbt`：
+
+- `MomAgentRuntime` 组合 `WorkspaceRuntime`、`CommandRuntime` 和可注入 `stream_fn`
+- `MomAgentConfig` 统一 model、sandbox、memory、tool/extension 装配
+- `MomAgent` 为每个 `adapter/channel` 建一个 `MomChannelSession`
+- `handle_message(...)` 会把当前 channel 的历史 log 同步进 `SessionManager`
+- 然后重建 system prompt，调用 `AgentSession.prompt_message(...)`
+- 运行完成后把最新 assistant 文本回写进 `channel_store`
+
+这让 mom 已经不只是“能准备 prompt”，而是能真正接住一条 channel 消息并驱动底层 coding agent 跑完一个 turn。
 
 另外，memory 也先做成纯文本组合函数：
 
@@ -124,6 +143,12 @@ pub(all) enum MomEvent {
 
 这让 phase 07 保持纯函数和可测试，不需要先把宿主 runtime 抽象再做一遍。
 
+在这之上，`MomAgent` 再把内存 store 当作最小可运行宿主，用它来验证：
+
+1. 每个 channel 只初始化一次 session
+2. 历史用户消息会被同步到 `SessionManager`
+3. 当前 prompt 跑完后，assistant 回复会进入 channel log
+
 ## prompt 为什么改成标准 markdown？
 
 `pi-mono` 的现有 Slack 版 system prompt 里有大量 mrkdwn 细节，比如：
@@ -142,7 +167,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 11 个测试，覆盖五条主线：
+`lib/mom` 当前新增 14 个测试，覆盖六条主线：
 
 ### store_test.mbt
 
@@ -164,11 +189,18 @@ pub(all) enum MomEvent {
 - event JSON 能解析并生成 `[EVENT:...]` 触发文本
 - system prompt 包含 memory、skills、events 与平台无关格式说明
 
+### agent_test.mbt
+
+- `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
+- 历史 channel log 会在当前 prompt 前同步进 `SessionManager`
+- `is_running(...)` 会在回调期间为真，执行结束后恢复为假
+
 ## 当前状态
 
 phase 07 之后，`lib/mom` 已经具备：
 
 - 平台无关消息模型
+- per-channel `AgentSession` 运行层
 - workspace/channel namespace 规则
 - log JSONL 编解码
 - context sync 到 `SessionManager`
@@ -184,4 +216,4 @@ phase 07 之后，`lib/mom` 已经具备：
 - cron / watcher 调度器
 - 真实 bash executor 和容器校验
 
-也就是说，这一版完成的是 mom 的“内核支撑层”，而不是最终可联网运行的聊天机器人宿主。
+也就是说，这一版完成的是 mom 的“平台无关运行层”，而不是最终可联网运行的聊天机器人宿主。

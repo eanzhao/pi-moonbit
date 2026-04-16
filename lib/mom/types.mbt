@@ -107,3 +107,46 @@ pub(all) struct ChannelLogMetadata {
 pub(all) struct InMemoryChannelStore {
   mut logs : Array[ChannelLog]
 }
+
+pub(all) struct MomAgentRuntime {
+  workspace_runtime : @coding_agent.WorkspaceRuntime
+  command_runtime : @coding_agent.CommandRuntime
+  now_iso : () -> String
+  stream_fn : @agent.AgentStreamFn?
+}
+
+pub(all) struct MomAgentConfig {
+  workspace_dir : String
+  sandbox : SandboxConfig
+  model : @ai.Model
+  thinking_level : @agent.AgentThinkingLevel
+  global_memory : String?
+  tools : Array[@agent.AgentTool]
+  extensions : Array[@coding_agent.CodingExtension]
+  runtime : MomAgentRuntime
+}
+
+pub(all) struct MomRunResult {
+  stop_reason : @ai.StopReason
+  error_message : String?
+  assistant_text : String
+  usage : @ai.Usage?
+} derive(Eq)
+
+pub(all) enum MomAgentError {
+  SessionInitFailed(String)
+  AgentError(@agent.AgentError)
+} derive(Eq)
+
+pub(all) struct MomChannelSession {
+  adapter : String
+  channel : ChannelInfo
+  session : @coding_agent.AgentSession
+  mut running : Bool
+}
+
+pub(all) struct MomAgent {
+  config : MomAgentConfig
+  mut channel_store : InMemoryChannelStore
+  mut sessions : Array[Ref[MomChannelSession]]
+}

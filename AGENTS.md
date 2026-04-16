@@ -5,14 +5,14 @@
 ## 这是什么？
 
 用 MoonBit 重写 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）。
-核心路径（Phase 01-05）已完成，67 个测试全部通过。
+核心路径（Phase 01-07）已完成，`lib/mom` 已具备平台无关运行层，124 个测试全部通过。
 
 ## 构建 & 测试
 
 ```bash
 moon check          # 类型检查
 moon build          # 编译
-moon test           # 全部测试（67 个）
+moon test           # 全部测试（124 个）
 moon test lib/ai    # 指定包测试
 ```
 
@@ -23,8 +23,10 @@ lib/ai/             # Phase 01 — LLM API 抽象
 lib/tui/            # Phase 02 — 终端 UI 框架
 lib/agent/          # Phase 03 — Agent 引擎
 lib/coding_agent/   # Phase 04 — 编码助手核心
+lib/web_ui/         # Phase 06 — Web UI 支撑层
+lib/mom/            # Phase 07 — Mom 运行层
 src/main/           # Phase 05 — CLI 入口（JS target 可运行）
-docs/               # 架构文档（00-05）
+docs/               # 架构文档（00-07）
 pi-mono/            # 原始 TypeScript（只读，不要修改）
 ```
 

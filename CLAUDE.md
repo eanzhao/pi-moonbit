@@ -7,7 +7,7 @@
 pi-moonbit 是 [pi-mono](https://github.com/badlogic/pi-mono)（AI Agent 工具包）的 MoonBit 重写。
 `pi-mono/` 目录是原始 TypeScript 代码（只读，不要修改）。
 
-**当前状态**：核心路径（Phase 01-07）已完成，106 个测试全部通过。
+**当前状态**：核心路径（Phase 01-07）已完成，`lib/mom` 已具备平台无关运行层，124 个测试全部通过。
 
 ## 工具链
 
@@ -29,7 +29,7 @@ pi-moonbit/
 │   ├── agent/          # Phase 03 — Agent 引擎
 │   ├── coding_agent/   # Phase 04 — 编码助手核心
 │   ├── web_ui/         # Phase 06 — Web UI 支撑层
-│   ├── mom/            # Phase 07 — Mom 支撑层
+│   ├── mom/            # Phase 07 — Mom 运行层
 │   └── pods/           # (待开发) GPU Pod 管理
 ├── src/main/           # Phase 05 — CLI 入口（JS target 可运行）
 └── pi-mono/            # 原始 TypeScript（只读）
@@ -45,7 +45,7 @@ pi-moonbit/
 | 04 | `lib/coding_agent` | append-only 会话树, 分支/compaction, 扩展钩子, read/write/edit/bash 工具 |
 | 05 | `src/main` | CLI 参数解析, 多 session JSONL 持久化, continue/resume, Print/REPL 模式, JS host FFI |
 | 06 | `lib/web_ui` | Web transcript, storage/store, proxy/format, model selector, custom provider 支撑层 |
-| 07 | `lib/mom` | 统一 channel 模型, log/context sync, sandbox/event/prompt 抽象, 内存 store |
+| 07 | `lib/mom` | 统一 channel 模型, per-channel AgentSession, log/context sync, sandbox/event/prompt 抽象, 内存 store |
 
 ## MoonBit 编码规范
 
