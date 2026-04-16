@@ -163,7 +163,7 @@ pub fn cli_help_text() -> String {
     "  --cwd <path>               Override working directory for tools",
     "  --model <id>               Set model id",
     "  --provider <id>            Set provider id",
-    "  --api <id>                 Set API id (openai-responses, anthropic-messages, etc.)",
+    "  --api <id>                 Set API id (openai-responses, anthropic-messages, mistral-conversation, etc.)",
     "  --base-url <url>           Override LLM API base URL",
     "  --thinking <level>         off|minimal|low|medium|high|xhigh",
     "",

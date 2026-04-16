@@ -52,6 +52,8 @@ fn create_cli_app(
                 try {
                   if model.api == @ai.api_anthropic_messages {
                     host_anthropic_stream(model, context, options, handler)
+                  } else if model.api == @ai.api_mistral {
+                    host_mistral_stream(model, context, options, handler)
                   } else {
                     host_openai_stream(model, context, options, handler)
                   }

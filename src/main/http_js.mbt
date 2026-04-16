@@ -208,6 +208,55 @@ fn host_openai_stream(
   }
 }
 
+///| 发起 Mistral OpenAI 兼容的 SSE 流式请求并通过 EventHandler 推送事件。
+fn host_mistral_stream(
+  model : @ai.Model,
+  context : @ai.Context,
+  options : @ai.StreamOptions,
+  handler : @ai.EventHandler
+) -> Unit!@ai.StreamError {
+  let base_url = match model.base_url {
+    Some(url) => url
+    None => "https://api.mistral.ai/v1"
+  }
+  let url = if base_url.has_suffix("/") {
+    base_url + "chat/completions"
+  } else {
+    base_url + "/chat/completions"
+  }
+  let api_key = match options.api_key {
+    Some(key) => key
+    None => host_env_var("MISTRAL_API_KEY").unwrap_or("")
+  }
+  let body = @ai.build_openai_request_body(model, context, options)
+  let result = host_fetch_sse_ffi(
+    url,
+    body.stringify(escape_slash=false),
+    api_key,
+    "",
+  )
+  if result.length() == 0 {
+    raise @ai.StreamError("empty response from LLM")
+  }
+  if result[0] == "err" {
+    let message = if result.length() > 1 { result[1] } else { "unknown error" }
+    raise @ai.StreamError(message)
+  }
+  let state = @ai.OpenAiStreamState::new(model)
+  for i = 1; i < result.length(); i = i + 1 {
+    let events = @ai.parse_openai_sse_line(result[i], state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+  if !state.terminal_emitted {
+    let events = @ai.parse_openai_sse_line("data: [DONE]", state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+}
+
 extern "js" fn host_env_var_ffi(name : String) -> String =
   #|(name) => { return process.env[name] || ""; }
 
