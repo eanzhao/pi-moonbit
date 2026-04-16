@@ -20,6 +20,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)` / `dispatch_periodic(...)`
 - `event_handle.mbt`：把 event loop 当前状态翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态、操作序列与 apply helper
 - `runner.mbt`：把 adapter turn、event loop、handle runtime sync 收成统一的宿主入口
+- `host.mbt`：提供 `InMemoryEventWorkspace` 和 `MomInMemoryHost`，把 mock/CLI 宿主常用拼装收成即用型对象
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -48,6 +49,7 @@ lib/mom/
 ├── event_loop.mbt
 ├── event_handle.mbt
 ├── runner.mbt
+├── host.mbt
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
@@ -66,6 +68,7 @@ lib/mom/
 ├── event_loop_test.mbt
 ├── event_handle_test.mbt
 ├── runner_test.mbt
+├── host_test.mbt
 ├── prompt_test.mbt
 └── agent_test.mbt
 ```
@@ -218,7 +221,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 63 个测试，覆盖这些主线：
+`lib/mom` 当前新增 67 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -289,6 +292,12 @@ pub(all) enum MomEvent {
 - event tick 会在 dispatch 后重新同步 future timer / periodic handle
 - periodic callback 也会复用同一条 runner 闭环
 
+### host_test.mbt
+
+- `MomInMemoryHost` 会把 event workspace、runner、adapter、handle runtime 和 mom agent 绑成一个即用宿主
+- host message / tick / periodic callback 都会走统一的 runner 编排
+- in-memory event workspace 会正确保留 future event、清理 consumed immediate event
+
 ### event_loop_test.mbt
 
 - workspace sync 会同时更新 host state、one-shot timer registry 和 periodic registry
@@ -325,7 +334,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、trigger dispatch、periodic callback dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、in-memory host 拼装、trigger dispatch、periodic callback dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
