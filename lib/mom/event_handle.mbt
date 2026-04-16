@@ -51,6 +51,117 @@ pub fn MomEventHandlePlan::has_changes(self : MomEventHandlePlan) -> Bool {
   self.removed_periodics.length() > 0
 }
 
+pub fn MomEventHandlePlan::operations(self : MomEventHandlePlan) -> Array[MomEventHandleOp] {
+  let ops : Array[MomEventHandleOp] = []
+  if self.watch_changed {
+    ops.push(SetWatchDir(self.state.watched_dir))
+  }
+  if self.wakeup_changed {
+    ops.push(SetWakeup(self.state.wakeup_due_at_ms))
+  }
+  for removed in self.removed_periodics {
+    ops.push(RemovePeriodic(removed.filename))
+  }
+  for added in self.added_periodics {
+    ops.push(RegisterPeriodic(added))
+  }
+  ops
+}
+
+pub fn[T : MomEventHandleRuntime] apply_event_handle_plan(
+  runtime : T,
+  plan : MomEventHandlePlan
+) -> Result[MomEventHandleState, String] {
+  for operation in plan.operations() {
+    match operation {
+      SetWatchDir(watched_dir) =>
+        match runtime.set_watch_dir(watched_dir) {
+          Ok(_) => ()
+          Err(message) => return Err(message)
+        }
+      SetWakeup(due_at_ms) =>
+        match runtime.set_wakeup_due_at_ms(due_at_ms) {
+          Ok(_) => ()
+          Err(message) => return Err(message)
+        }
+      RegisterPeriodic(entry) =>
+        match runtime.register_periodic(entry) {
+          Ok(_) => ()
+          Err(message) => return Err(message)
+        }
+      RemovePeriodic(filename) =>
+        match runtime.remove_periodic(filename) {
+          Ok(_) => ()
+          Err(message) => return Err(message)
+        }
+    }
+  }
+  Ok(plan.state)
+}
+
+pub fn InMemoryEventHandleRuntime::new(
+  state? : MomEventHandleState = MomEventHandleState::new()
+) -> InMemoryEventHandleRuntime {
+  {
+    watched_dir: state.watched_dir,
+    wakeup_due_at_ms: state.wakeup_due_at_ms,
+    registered_periodics: state.registered_periodics.copy(),
+    operations: [],
+  }
+}
+
+pub fn InMemoryEventHandleRuntime::snapshot(
+  self : InMemoryEventHandleRuntime
+) -> MomEventHandleState {
+  MomEventHandleState::new(
+    watched_dir=self.watched_dir,
+    wakeup_due_at_ms=self.wakeup_due_at_ms,
+    registered_periodics=self.registered_periodics,
+  )
+}
+
+pub fn InMemoryEventHandleRuntime::list_operations(
+  self : InMemoryEventHandleRuntime
+) -> Array[MomEventHandleOp] {
+  self.operations.copy()
+}
+
+pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with set_watch_dir(self, watched_dir) {
+  self.watched_dir = watched_dir
+  self.operations.push(SetWatchDir(watched_dir))
+  Ok(())
+}
+
+pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with set_wakeup_due_at_ms(self, due_at_ms) {
+  self.wakeup_due_at_ms = due_at_ms
+  self.operations.push(SetWakeup(due_at_ms))
+  Ok(())
+}
+
+pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with register_periodic(self, entry) {
+  self.operations.push(RegisterPeriodic(entry))
+  for i in 0..<self.registered_periodics.length() {
+    if self.registered_periodics[i].filename == entry.filename {
+      self.registered_periodics[i] = entry
+      return Ok(())
+    }
+  }
+  self.registered_periodics.push(entry)
+  Ok(())
+}
+
+pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with remove_periodic(self, filename) {
+  self.operations.push(RemovePeriodic(filename))
+  let retained : Array[MomRegisteredPeriodic] = []
+  for item in self.registered_periodics {
+    if item.filename != filename {
+      retained.push(item)
+    }
+  }
+  self.registered_periodics = retained
+  Ok(())
+}
+
 fn diff_handle_added_periodics(
   previous : Array[MomRegisteredPeriodic],
   current : Array[MomRegisteredPeriodic]

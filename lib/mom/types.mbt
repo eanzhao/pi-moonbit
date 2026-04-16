@@ -202,6 +202,13 @@ pub(all) struct MomEventHandlePlan {
   removed_periodics : Array[MomRegisteredPeriodic]
 } derive(Eq)
 
+pub(all) enum MomEventHandleOp {
+  SetWatchDir(String?)
+  SetWakeup(UInt64?)
+  RegisterPeriodic(MomRegisteredPeriodic)
+  RemovePeriodic(String)
+} derive(Eq)
+
 pub(all) struct MomEventTickResult {
   flushed_files : Array[String]
   workspace_results : Array[MomEventDispatchResult]
@@ -295,6 +302,20 @@ pub(all) struct InMemoryPlatformAdapter {
   mut started : Bool
   mut sent_messages : Array[AdapterSentMessage]
   mut observed_events : Array[String]
+}
+
+pub(all) struct InMemoryEventHandleRuntime {
+  mut watched_dir : String?
+  mut wakeup_due_at_ms : UInt64?
+  mut registered_periodics : Array[MomRegisteredPeriodic]
+  mut operations : Array[MomEventHandleOp]
+}
+
+pub(open) trait MomEventHandleRuntime {
+  set_watch_dir(Self, String?) -> Result[Unit, String]
+  set_wakeup_due_at_ms(Self, UInt64?) -> Result[Unit, String]
+  register_periodic(Self, MomRegisteredPeriodic) -> Result[Unit, String]
+  remove_periodic(Self, String) -> Result[Unit, String]
 }
 
 pub(open) trait PlatformAdapter {

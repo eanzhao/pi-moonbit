@@ -18,7 +18,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_timer.mbt`：one-shot timer registry，支持 register / remove / flush due
 - `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta，并支持按 filename 查当前注册项
 - `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)` / `dispatch_periodic(...)`
-- `event_handle.mbt`：把 event loop 当前状态翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态与增量
+- `event_handle.mbt`：把 event loop 当前状态翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态、操作序列与 apply helper
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -215,7 +215,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 56 个测试，覆盖这些主线：
+`lib/mom` 当前新增 59 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -275,6 +275,8 @@ pub(all) enum MomEvent {
 
 - loop 当前状态可以被翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态
 - handle plan 会显式给出需要新增和移除的 periodic 注册项
+- handle plan 会输出稳定顺序的宿主操作序列
+- `apply_event_handle_plan(...)` 可直接驱动平台无关 handle runtime，并把状态推进到目标值
 - 当宿主状态已经和 loop 对齐时，handle plan 会稳定收敛为 no-op
 
 ### event_loop_test.mbt
@@ -313,7 +315,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning、trigger dispatch、periodic callback dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、trigger dispatch、periodic callback dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
