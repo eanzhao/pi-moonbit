@@ -1,6 +1,7 @@
 pub(all) enum CliMode {
   Interactive
   Print
+  Rpc
 } derive(Eq)
 
 pub(all) struct CliConfig {

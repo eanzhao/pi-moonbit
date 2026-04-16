@@ -52,6 +52,8 @@ fn create_cli_app(
                 try {
                   if model.api == @ai.api_anthropic_messages {
                     host_anthropic_stream(model, context, options, handler)
+                  } else if model.api == @ai.api_google_genai {
+                    host_gemini_stream(model, context, options, handler)
                   } else if model.api == @ai.api_mistral {
                     host_mistral_stream(model, context, options, handler)
                   } else {
@@ -86,6 +88,7 @@ pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
       match config.mode {
         CliMode::Print => run_print_mode(app, config.messages)
         CliMode::Interactive => run_tui_interactive_mode(app, config.messages)
+        CliMode::Rpc => run_rpc_mode(app)
       }
   }
 }

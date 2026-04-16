@@ -24,6 +24,8 @@ pub fn parse_cli_args(
       return Ok(CliParseResult::Help(cli_help_text()))
     } else if arg == "--print" || arg == "-p" {
       mode = CliMode::Print
+    } else if arg == "--rpc" {
+      mode = CliMode::Rpc
     } else if arg == "--system-prompt" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --system-prompt")
@@ -154,6 +156,7 @@ pub fn cli_help_text() -> String {
     "Options:",
     "  -h, --help                 Show this help",
     "  -p, --print                Run prompts and exit",
+    "  --rpc                      Run JSONL RPC mode over stdin/stdout",
     "  --system-prompt <text>     Override the system prompt",
     "  -c, --continue             Continue the most recent saved session",
     "  -r, --resume               Choose a saved session to resume",
