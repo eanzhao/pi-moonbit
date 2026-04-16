@@ -5,6 +5,30 @@ pub fn MomHostDriver::new(
   { host: Ref::new(host), callbacks }
 }
 
+pub fn MomHostDriver::new_in_memory(
+  config : MomAgentConfig,
+  adapter_name : String,
+  channels : Array[ChannelInfo],
+  users : Array[UserInfo],
+  started_at : String,
+  callbacks : MomHostCallbacks,
+  debounce_ms? : UInt64 = 100UL,
+  event_files? : Array[MomEventFile] = []
+) -> MomHostDriver {
+  MomHostDriver::new(
+    MomInMemoryHost::new(
+      config,
+      adapter_name,
+      channels,
+      users,
+      started_at,
+      debounce_ms~,
+      event_files~,
+    ),
+    callbacks,
+  )
+}
+
 pub fn MomHostDriver::step(
   self : MomHostDriver,
   input : MomHostInput
@@ -47,6 +71,29 @@ pub fn MomHostDriver::dispatch_periodic(
   now : String
 ) -> Result[MomHostStep, MomHostStepError] {
   self.step(Periodic(filename, now))
+}
+
+pub fn MomHostDriver::write_event(
+  self : MomHostDriver,
+  filename : String,
+  event : MomEvent,
+  modified_at? : String? = None
+) -> Unit {
+  self.host.val.write_event(filename, event, modified_at~)
+}
+
+pub fn MomHostDriver::delete_event_file(
+  self : MomHostDriver,
+  filename : String
+) -> Bool {
+  self.host.val.delete_event_file(filename)
+}
+
+pub fn MomHostDriver::clear_file_change(
+  self : MomHostDriver,
+  filename : String
+) -> Bool {
+  self.host.val.clear_file_change(filename)
 }
 
 pub fn MomHostDriver::events_dir(self : MomHostDriver) -> String {

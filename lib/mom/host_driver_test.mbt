@@ -115,3 +115,79 @@ test "host driver file_changed and wakeup reuse same host instance" {
   assert_eq(driver.list_event_files().length(), 1)
   assert_eq(driver.list_event_files()[0].filename, "future.json")
 }
+
+test "host driver new_in_memory builds usable driver directly" {
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let driver = MomHostDriver::new_in_memory(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    MomHostCallbacks::new(
+      fn(watched_dir) {
+        operations.val.push(SetWatchDir(watched_dir))
+        Ok(())
+      },
+      fn(due_at_ms) {
+        operations.val.push(SetWakeup(due_at_ms))
+        Ok(())
+      },
+      fn(entry) {
+        operations.val.push(RegisterPeriodic(entry))
+        Ok(())
+      },
+      fn(filename) {
+        operations.val.push(RemovePeriodic(filename))
+        Ok(())
+      },
+    ),
+    event_files=[{
+      filename: "daily.json",
+      content: "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      modified_at: None,
+    }],
+  )
+
+  let step = driver.sync("2026-04-17T09:00:00+08:00").unwrap()
+
+  match step.result {
+    Synced(sync) => assert_eq(sync.sync.changed_plans.length(), 1)
+    _ => fail("expected sync result")
+  }
+  assert_eq(operations.val.length(), 2)
+  assert_eq(driver.handle_state().registered_periodics.length(), 1)
+}
+
+test "host driver exposes event workspace mutation helpers" {
+  let driver = MomHostDriver::new_in_memory(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    MomHostCallbacks::new(
+      fn(_watched_dir) { Ok(()) },
+      fn(_due_at_ms) { Ok(()) },
+      fn(_entry) { Ok(()) },
+      fn(_filename) { Ok(()) },
+    ),
+  )
+
+  driver.write_event(
+    "future.json",
+    MomEvent::OneShot({
+      channel_id: "slack-acme/C123",
+      text: "future",
+      at: "2026-04-17T10:00:00+08:00",
+    }),
+  )
+  ignore(driver.file_changed("future.json", 1_000UL).unwrap())
+
+  assert_eq(driver.list_event_files().length(), 1)
+  assert_eq(driver.list_pending_file_changes().length(), 1)
+  assert_true(driver.clear_file_change("future.json"))
+  assert_eq(driver.list_pending_file_changes().length(), 0)
+  assert_true(driver.delete_event_file("future.json"))
+  assert_eq(driver.list_event_files().length(), 0)
+}

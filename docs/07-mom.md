@@ -21,7 +21,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_handle.mbt`：把 event loop 当前状态翻译成宿主 watcher / wakeup timer / periodic handle 的目标状态、操作序列、closure callback runtime、`MomHostCallbacks` bundle 与 apply helper
 - `runner.mbt`：把 adapter turn、event loop、handle runtime sync 收成统一的宿主入口
 - `host.mbt`：提供 `InMemoryEventWorkspace`、`MomInMemoryHost`、`MomHostInput` / `MomHostResult` / `MomHostStep` / `MomHostStepError`，把 mock/CLI 宿主常用拼装收成即用型对象，并统一 message / file change / wakeup / periodic callback 入口、per-step callback delta、callback bundle 与 callback apply helper
-- `host_driver.mbt`：把 `MomInMemoryHost` 和 `MomHostCallbacks` 固定成一个可长期持有的 driver，对宿主直接暴露 `sync / message / file_changed / wakeup / periodic`
+- `host_driver.mbt`：把 `MomInMemoryHost` 和 `MomHostCallbacks` 固定成一个可长期持有的 driver，对宿主直接暴露 `sync / message / file_changed / wakeup / periodic`，并提供 `new_in_memory(...)` 与 event workspace mutation helpers
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -224,7 +224,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 78 个测试，覆盖这些主线：
+`lib/mom` 当前新增 80 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -310,6 +310,7 @@ pub(all) enum MomEvent {
 
 - `MomHostDriver` 会把 `MomInMemoryHost` 和 `MomHostCallbacks` 绑成长期持有的宿主 driver
 - `sync / periodic / file_changed / wakeup` 会共享同一份 host 状态，而不是每次重新拼装
+- `new_in_memory(...)` 可直接产出可运行 driver，`write_event / delete_event_file / clear_file_change` 可让宿主直接维护 event workspace
 
 ### event_loop_test.mbt
 
@@ -347,7 +348,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、in-memory host 拼装、统一 host step API、per-step callback delta、closure callback runtime 接线、callback bundle、单步 callback apply helper、长期持有 host driver、trigger dispatch、periodic callback dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、host handle planning / apply、runner 编排、in-memory host 拼装、统一 host step API、per-step callback delta、closure callback runtime 接线、callback bundle、单步 callback apply helper、长期持有 host driver、driver builder、event workspace mutation helpers、trigger dispatch、periodic callback dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
