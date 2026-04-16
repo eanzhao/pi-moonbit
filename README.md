@@ -11,7 +11,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 
 ## 当前进度
 
-**核心路径已完成**：6 个阶段、89 个测试全部通过。
+**核心路径已完成**：6 个阶段、95 个测试全部通过。
 
 | 包 | 状态 | 说明 |
 |---|---|---|
@@ -20,7 +20,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 | `lib/agent` | ✅ 已完成 | Agent 引擎：回合循环、工具三阶段执行、事件系统、steering/follow-up 队列 |
 | `lib/coding_agent` | ✅ 已完成 | 编码助手核心：append-only 会话树、分支/compaction、扩展钩子、4 个内置工具 |
 | `src/main` | ✅ 已完成 | CLI 入口：参数解析、多 session JSONL 存储、`--continue/--resume`、Print/REPL、JS host runtime |
-| `lib/web_ui` | ✅ 已完成 | Web transcript、storage/store、proxy/format、model selector 与 custom provider 支撑逻辑 |
+| `lib/web_ui` | ✅ 已完成 | Web transcript、storage/store、proxy/format，以及纯 MoonBit 组件/HTML 视图层 |
 | `lib/mom` | 🔲 待开发 | Slack 机器人集成 |
 | `lib/pods` | 🔲 待开发 | GPU Pod 管理 |
 
@@ -31,7 +31,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 ```bash
 moon check          # 类型检查
 moon build          # 编译
-moon test           # 运行全部 89 个测试
+moon test           # 运行全部 95 个测试
 moon test lib/ai    # 运行某个包的测试
 ```
 
@@ -61,7 +61,7 @@ pi-moonbit/
 - [03 - Agent 引擎](docs/03-agent.md) — 回合循环、工具执行、事件与状态
 - [04 - Coding Agent](docs/04-coding-agent.md) — 会话管理、扩展系统、内置工具
 - [05 - CLI 入口](docs/05-cli.md) — 参数解析、多 session JSONL、continue/resume、REPL
-- [06 - Web UI 支撑层](docs/06-web-ui.md) — Web transcript、storage/store、proxy/format、model selector
+- [06 - Web UI 支撑层](docs/06-web-ui.md) — Web transcript、storage/store、proxy/format、component/html view layer
 
 ## 参考
 
