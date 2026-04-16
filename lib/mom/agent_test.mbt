@@ -13,8 +13,13 @@ fn mom_test_model() -> @ai.Model {
   }
 }
 
-fn mom_test_runtime() -> MomAgentRuntime {
-  let workspace = Ref::new(@coding_agent.InMemoryWorkspace::new())
+fn mom_test_workspace() -> Ref[@coding_agent.InMemoryWorkspace] {
+  Ref::new(@coding_agent.InMemoryWorkspace::new())
+}
+
+fn mom_test_runtime_with_workspace(
+  workspace : Ref[@coding_agent.InMemoryWorkspace]
+) -> MomAgentRuntime {
   MomAgentRuntime::new(
     @coding_agent.in_memory_workspace_runtime(workspace),
     {
@@ -32,6 +37,10 @@ fn mom_test_runtime() -> MomAgentRuntime {
     now_iso=fn() { "2026-04-16T12:00:00.000Z" },
     stream_fn=Some(mom_test_stream_fn()),
   )
+}
+
+fn mom_test_runtime() -> MomAgentRuntime {
+  mom_test_runtime_with_workspace(mom_test_workspace())
 }
 
 fn mom_test_stream_fn() -> @agent.AgentStreamFn {
@@ -93,12 +102,20 @@ fn mom_test_message_for_agent(id : String, text : String) -> ChannelMessage {
   }
 }
 
+fn mom_workspace_file_text(
+  workspace : Ref[@coding_agent.InMemoryWorkspace],
+  path : String
+) -> String {
+  workspace.val.get_content(path).unwrap_or("")
+}
+
 test "mom agent handle_message creates session emits events and appends bot log" {
+  let workspace = mom_test_workspace()
   let mom = MomAgent::new(MomAgentConfig::new(
     "/workspace",
     SandboxConfig::Host,
     mom_test_model(),
-    mom_test_runtime(),
+    mom_test_runtime_with_workspace(workspace),
     global_memory=Some("Use apply_patch."),
   ))
   let events : Ref[Array[String]] = Ref::new([])
@@ -119,16 +136,36 @@ test "mom agent handle_message creates session emits events and appends bot log"
   assert_eq(log.length(), 2)
   assert_true(log[1].sender.is_bot)
   assert_eq(log[1].text, "echo:[mario]: hello")
+
+  let log_text = mom_workspace_file_text(
+    workspace,
+    workspace_channel_log_path("/workspace", "slack-acme", "C123"),
+  )
+  let parsed_log = parse_log_jsonl(log_text, "C123").unwrap()
+  assert_eq(parsed_log.length(), 2)
+
+  let context_text = mom_workspace_file_text(
+    workspace,
+    workspace_channel_context_path("/workspace", "slack-acme", "C123"),
+  )
+  assert_true(context_text.contains("\"kind\":\"session\""))
 }
 
 test "mom agent syncs prior log messages into session context before current prompt" {
+  let workspace = mom_test_workspace()
   let mom = MomAgent::new(MomAgentConfig::new(
     "/workspace",
     SandboxConfig::Host,
     mom_test_model(),
-    mom_test_runtime(),
+    mom_test_runtime_with_workspace(workspace),
   ))
-  ignore(mom.channel_store.append_message("slack-acme", mom_test_message_for_agent("m0", "previous")))
+  ignore(save_channel_log_to_workspace(
+    mom.config.runtime.workspace_runtime,
+    "/workspace",
+    "slack-acme",
+    "C123",
+    [mom_test_message_for_agent("m0", "previous")],
+  ))
 
   let result = mom.handle_message(
     mom_test_message_for_agent("m1", "current"),
@@ -171,6 +208,80 @@ test "mom agent exposes running state during callback and clears it afterwards" 
 
   assert_true(saw_running.val)
   assert_true(!mom.is_running("slack-acme/C123"))
+}
+
+test "mom agent reloads persisted context after restart" {
+  let workspace = mom_test_workspace()
+  let config = MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    mom_test_model(),
+    mom_test_runtime_with_workspace(workspace),
+  )
+  let first = MomAgent::new(config)
+  let _ = first.handle_message(
+    mom_test_message_for_agent("m1", "first"),
+    mom_test_context(),
+  ).unwrap()
+
+  let second = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    mom_test_model(),
+    mom_test_runtime_with_workspace(workspace),
+  ))
+  let _ = second.handle_message(
+    mom_test_message_for_agent("m2", "second"),
+    mom_test_context(),
+  ).unwrap()
+
+  let session = second.get_session("slack-acme/C123").unwrap()
+  let transcript = session.val.session.session_manager.build_transcript_messages()
+  assert_eq(transcript.length(), 4)
+  match transcript[0] {
+    @ai.Message::User(message) =>
+      match message.content[0] {
+        @ai.ContentBlock::Text(text) => assert_eq(text, "[mario]: first")
+        _ => fail("expected text")
+      }
+    _ => fail("expected user")
+  }
+  match transcript[1] {
+    @ai.Message::Assistant(message) =>
+      match message.content[0] {
+        @ai.ContentBlock::Text(text) => assert_eq(text, "echo:[mario]: first")
+        _ => fail("expected text")
+      }
+    _ => fail("expected assistant")
+  }
+}
+
+test "mom agent loads workspace memory files into system prompt" {
+  let workspace = mom_test_workspace()
+  ignore(workspace.val.files.push({
+    path: workspace_global_memory_path("/workspace"),
+    content: "Global note",
+  }))
+  ignore(workspace.val.files.push({
+    path: workspace_channel_memory_path("/workspace", "slack-acme", "C123"),
+    content: "Channel note",
+  }))
+
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    mom_test_model(),
+    mom_test_runtime_with_workspace(workspace),
+  ))
+  let _ = mom.handle_message(
+    mom_test_message_for_agent("m1", "hello"),
+    mom_test_context(),
+  ).unwrap()
+
+  let session = mom.get_session("slack-acme/C123").unwrap()
+  let prompt = session.val.session.agent.state.system_prompt
+  assert_true(prompt.contains("Global note"))
+  assert_true(prompt.contains("Channel note"))
 }
 
 fn mom_agent_test_event_name(event : @agent.AgentEvent) -> String {

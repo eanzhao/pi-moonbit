@@ -78,12 +78,32 @@ pub fn MomAgent::handle_message(
   on_event? : ((@agent.AgentEvent) -> Unit)? = None,
 ) -> Result[MomRunResult, MomAgentError] {
   let channel = find_context_channel(context, message.channel_id)
+  let persisted_log = match load_channel_log_from_workspace(
+    self.config.runtime.workspace_runtime,
+    self.config.workspace_dir,
+    context.adapter,
+    message.channel_id,
+  ) {
+    Ok(value) => value
+    Err(message) => return Err(WorkspaceReadFailed(message))
+  }
+  self.channel_store.replace_log(context.adapter, message.channel_id, persisted_log)
   let session_ref = match self.ensure_session(context.adapter, channel) {
     Ok(value) => value
     Err(message) => return Err(SessionInitFailed(message))
   }
 
   ignore(self.channel_store.append_message(context.adapter, message))
+  match save_channel_log_to_workspace(
+    self.config.runtime.workspace_runtime,
+    self.config.workspace_dir,
+    context.adapter,
+    message.channel_id,
+    self.channel_store.get_log(context.adapter, message.channel_id),
+  ) {
+    Ok(_) => ()
+    Err(message) => return Err(WorkspaceWriteFailed(message))
+  }
   let log_messages = self.channel_store.get_log(context.adapter, message.channel_id)
   ignore(sync_channel_log_to_session_manager(
     session_ref.val.session.session_manager,
@@ -91,9 +111,19 @@ pub fn MomAgent::handle_message(
     exclude_message_id=Some(message.id),
   ))
 
+  let loaded_memory = match load_workspace_memory_sections(
+    self.config.runtime.workspace_runtime,
+    self.config.workspace_dir,
+    context.adapter,
+    message.channel_id,
+  ) {
+    Ok(value) => value
+    Err(message) => return Err(WorkspaceReadFailed(message))
+  }
+  let (workspace_global_memory, workspace_channel_memory) = loaded_memory
   let memory = build_memory_text(
-    global_memory=self.config.global_memory,
-    channel_memory=channel_memory,
+    global_memory=merge_mom_memory_sections(workspace_global_memory, self.config.global_memory),
+    channel_memory=merge_mom_memory_sections(workspace_channel_memory, channel_memory),
   )
   session_ref.val.session.agent.state.system_prompt = build_mom_system_prompt(
     self.config.workspace_dir,
@@ -125,6 +155,26 @@ pub fn MomAgent::handle_message(
     Ok(_) => {
       let result = build_run_result(session_ref.val.session.session_manager.build_transcript_messages())
       maybe_append_assistant_log(self.channel_store, context.adapter, message.channel_id, result, self.config.runtime.now_iso)
+      match save_channel_log_to_workspace(
+        self.config.runtime.workspace_runtime,
+        self.config.workspace_dir,
+        context.adapter,
+        message.channel_id,
+        self.channel_store.get_log(context.adapter, message.channel_id),
+      ) {
+        Ok(_) => ()
+        Err(message) => return Err(WorkspaceWriteFailed(message))
+      }
+      match save_channel_context_to_workspace(
+        self.config.runtime.workspace_runtime,
+        self.config.workspace_dir,
+        context.adapter,
+        message.channel_id,
+        session_ref.val.session.session_manager,
+      ) {
+        Ok(_) => ()
+        Err(message) => return Err(WorkspaceWriteFailed(message))
+      }
       Ok(result)
     }
   }
@@ -139,10 +189,18 @@ fn MomAgent::ensure_session(
     Some(session_ref) => Ok(session_ref)
     None => {
       let timestamp = (self.config.runtime.now_iso)()
-      let session_manager = @coding_agent.SessionManager::new(
-        session_id=mom_session_id(adapter, channel.id),
-        timestamp=timestamp,
-      )
+      let session_id = mom_session_id(adapter, channel.id)
+      let session_manager = match load_channel_context_from_workspace(
+        self.config.runtime.workspace_runtime,
+        self.config.workspace_dir,
+        adapter,
+        channel.id,
+        session_id,
+        timestamp,
+      ) {
+        Ok(value) => value
+        Err(message) => return Err(message)
+      }
       let extensions = @coding_agent.ExtensionRuntime::new(extensions=self.config.extensions)
       let session = match @coding_agent.AgentSession::new(
         self.config.model,
@@ -267,6 +325,37 @@ fn assistant_message_text(message : @ai.AssistantMessage) -> String {
     }
   }
   parts.join("")
+}
+
+fn merge_mom_memory_sections(left : String?, right : String?) -> String? {
+  let parts : Array[String] = []
+  match mom_memory_part(left) {
+    Some(value) => parts.push(value)
+    None => ()
+  }
+  match mom_memory_part(right) {
+    Some(value) => parts.push(value)
+    None => ()
+  }
+  if parts.length() == 0 {
+    None
+  } else {
+    Some(parts.join("\n\n"))
+  }
+}
+
+fn mom_memory_part(text : String?) -> String? {
+  match text {
+    Some(value) => {
+      let trimmed = value.trim().to_string()
+      if trimmed.length() == 0 {
+        None
+      } else {
+        Some(trimmed)
+      }
+    }
+    None => None
+  }
 }
 
 fn mom_session_id(adapter : String, channel_id : String) -> String {

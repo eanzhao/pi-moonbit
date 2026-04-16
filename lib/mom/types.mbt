@@ -135,6 +135,8 @@ pub(all) struct MomRunResult {
 
 pub(all) enum MomAgentError {
   SessionInitFailed(String)
+  WorkspaceReadFailed(String)
+  WorkspaceWriteFailed(String)
   AgentError(@agent.AgentError)
 } derive(Eq)
 

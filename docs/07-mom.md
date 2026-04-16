@@ -16,6 +16,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `MomAgent`：按 `adapter/channel` 复用 `AgentSession`
 - channel 消息驱动 `coding_agent.AgentSession` 执行，并把 assistant 回复回写到 log
 - `@agent.AgentEvent` 透传与运行状态跟踪
+- `workspace.mbt`：`log.jsonl` / `context.jsonl` / `MEMORY.md` 的工作区读写与恢复
 
 对应源码：
 
@@ -29,6 +30,7 @@ lib/mom/
 ├── events.mbt
 ├── prompt.mbt
 ├── agent.mbt
+├── workspace.mbt
 ├── store_test.mbt
 ├── context_test.mbt
 ├── sandbox_test.mbt
@@ -115,8 +117,17 @@ pub(all) enum MomEvent {
 - `handle_message(...)` 会把当前 channel 的历史 log 同步进 `SessionManager`
 - 然后重建 system prompt，调用 `AgentSession.prompt_message(...)`
 - 运行完成后把最新 assistant 文本回写进 `channel_store`
+- 并把 `log.jsonl` / `context.jsonl` 保存回工作区
 
 这让 mom 已经不只是“能准备 prompt”，而是能真正接住一条 channel 消息并驱动底层 coding agent 跑完一个 turn。
+
+第三处是 `workspace.mbt`：
+
+- `load_channel_log_from_workspace(...)` / `save_channel_log_to_workspace(...)`
+- `load_channel_context_from_workspace(...)` / `save_channel_context_to_workspace(...)`
+- `load_workspace_memory_sections(...)`
+
+也就是说，channel session 现在不再只是进程内状态；它已经可以从工作区恢复 `context.jsonl`，并在每次 turn 结束后把上下文重新写回工作区。
 
 另外，memory 也先做成纯文本组合函数：
 
@@ -167,7 +178,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 14 个测试，覆盖六条主线：
+`lib/mom` 当前新增 16 个测试，覆盖六条主线：
 
 ### store_test.mbt
 
@@ -194,6 +205,8 @@ pub(all) enum MomEvent {
 - `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
 - 历史 channel log 会在当前 prompt 前同步进 `SessionManager`
 - `is_running(...)` 会在回调期间为真，执行结束后恢复为假
+- 新实例可以从 `context.jsonl` 恢复已有 session transcript
+- `MEMORY.md` 会自动读入 system prompt
 
 ## 当前状态
 
@@ -203,6 +216,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - per-channel `AgentSession` 运行层
 - workspace/channel namespace 规则
 - log JSONL 编解码
+- workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
 - events 解析与 prompt 支撑
