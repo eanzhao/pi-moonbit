@@ -258,6 +258,97 @@ test "event loop flush_due_one_shots dispatches due timers and cleans files" {
   assert_eq(event_workspace.val.list_files("/workspace/events").unwrap().length(), 0)
 }
 
+test "event loop next_due_at_ms returns earliest pending wakeup" {
+  let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z", debounce_ms=100UL)
+  let event_workspace = test_loop_workspace([
+    (
+      "/workspace/events/future.json",
+      "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      None,
+    ),
+  ])
+  let runtime = test_loop_runtime(event_workspace)
+
+  assert_eq(loop_.next_due_at_ms(), None)
+  loop_.note_file_change("pending.json", 1_000UL)
+  ignore(loop_.sync_workspace(runtime, "2026-04-17T09:00:00+08:00").unwrap())
+
+  assert_eq(loop_.next_due_at_ms(), Some(1_100UL))
+  ignore(loop_.flush_due_file_changes(1_100UL))
+  assert_eq(
+    loop_.next_due_at_ms(),
+    Some(parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap()),
+  )
+}
+
+test "event loop tick processes due workspace file changes" {
+  let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z", debounce_ms=100UL)
+  let event_workspace = test_loop_workspace([
+    (
+      "/workspace/events/immediate.json",
+      "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"ping\"}",
+      Some("2026-04-16T12:04:59.950Z"),
+    ),
+  ])
+  let runtime = test_loop_runtime(event_workspace)
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_loop_test_model(),
+    event_loop_test_agent_runtime(),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_loop_test_channels(),
+    event_loop_test_users(),
+  )
+  loop_.note_file_change(
+    "immediate.json",
+    parse_mom_timestamp_ms("2026-04-16T12:04:59.900Z").unwrap(),
+  )
+
+  let result = loop_.tick(runtime, adapter, mom, "2026-04-16T12:05:00.000Z").unwrap()
+
+  assert_eq(result.flushed_files, ["immediate.json"])
+  assert_eq(result.workspace_results.length(), 1)
+  assert_eq(result.one_shot_results.length(), 0)
+  assert_eq(adapter.sent_messages.length(), 1)
+  assert_eq(event_workspace.val.list_files("/workspace/events").unwrap().length(), 0)
+}
+
+test "event loop tick flushes due one-shot timers without workspace changes" {
+  let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z")
+  let event_workspace = test_loop_workspace([
+    (
+      "/workspace/events/future.json",
+      "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      None,
+    ),
+  ])
+  let runtime = test_loop_runtime(event_workspace)
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_loop_test_model(),
+    event_loop_test_agent_runtime(),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_loop_test_channels(),
+    event_loop_test_users(),
+  )
+
+  ignore(loop_.sync_workspace(runtime, "2026-04-17T09:00:00+08:00").unwrap())
+  let result = loop_.tick(runtime, adapter, mom, "2026-04-17T10:00:00+08:00").unwrap()
+
+  assert_eq(result.flushed_files.length(), 0)
+  assert_eq(result.workspace_results.length(), 0)
+  assert_eq(result.one_shot_results.length(), 1)
+  assert_eq(adapter.sent_messages.length(), 1)
+  assert_eq(loop_.list_one_shot_timers().length(), 0)
+  assert_eq(event_workspace.val.list_files("/workspace/events").unwrap().length(), 0)
+}
+
 test "event loop forwards debounce queue operations" {
   let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z", debounce_ms=100UL)
 

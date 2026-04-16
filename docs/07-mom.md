@@ -17,7 +17,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_watch.mbt`：提供 watcher 侧 debounce queue，把抖动的文件变化折叠成稳定的待处理 filename 列表
 - `event_timer.mbt`：one-shot timer registry，支持 register / remove / flush due
 - `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta
-- `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop
+- `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)`
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -212,7 +212,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 46 个测试，覆盖这些主线：
+`lib/mom` 当前新增 50 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -258,6 +258,7 @@ pub(all) enum MomEvent {
 
 - 重复文件变化会刷新 debounce deadline，而不是重复排队
 - `flush_due(...)` 只返回已到期的 filename
+- `next_due_at_ms(...)` 可让宿主直接计算下一次 debounce 唤醒点
 - 多个 pending 文件会按 due time 和 filename 稳定排序
 - `clear(...)` 可用于宿主取消已无效的待处理事件
 
@@ -272,6 +273,8 @@ pub(all) enum MomEvent {
 - workspace sync 会同时更新 host state、one-shot timer registry 和 periodic registry
 - immediate event 会在 loop 中被直接 dispatch 并清理文件
 - 到点的 one-shot timer 会在 loop 中被 flush、dispatch 并清理文件
+- `next_due_at_ms(...)` 会返回 debounce queue 和 one-shot timer 里的最早唤醒点
+- `tick(...)` 会把 due file change 和 due one-shot timer 收成一次宿主轮询
 - watcher debounce queue 会通过 loop API 暴露给宿主
 
 ### agent_test.mbt

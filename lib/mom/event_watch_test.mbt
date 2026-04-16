@@ -30,6 +30,18 @@ test "event debounce queue sorts due files by deadline then filename" {
   assert_eq(due, ["c.json", "a.json", "b.json"])
 }
 
+test "event debounce queue exposes earliest due time" {
+  let queue = MomEventDebounceQueue::new(debounce_ms=100UL)
+
+  assert_eq(queue.next_due_at_ms(), None)
+  queue.note_change("b.json", 1_000UL)
+  queue.note_change("a.json", 900UL)
+
+  assert_eq(queue.next_due_at_ms(), Some(1_000UL))
+  ignore(queue.flush_due(1_000UL))
+  assert_eq(queue.next_due_at_ms(), Some(1_100UL))
+}
+
 test "event debounce queue can clear pending files" {
   let queue = MomEventDebounceQueue::new(debounce_ms=100UL)
 

@@ -29,6 +29,19 @@ pub fn MomEventLoop::list_periodic_entries(
   self.periodic_registry.list_entries()
 }
 
+pub fn MomEventLoop::next_due_at_ms(self : MomEventLoop) -> UInt64? {
+  let next_file_due = self.debounce_queue.next_due_at_ms()
+  let next_timer_due = self.one_shot_registry.next_due_at_ms()
+  match next_file_due {
+    Some(file_due) =>
+      match next_timer_due {
+        Some(timer_due) => Some(if file_due <= timer_due { file_due } else { timer_due })
+        None => Some(file_due)
+      }
+    None => next_timer_due
+  }
+}
+
 pub fn MomEventLoop::note_file_change(
   self : MomEventLoop,
   filename : String,
@@ -119,6 +132,34 @@ pub fn[T : PlatformAdapter] MomEventLoop::flush_due_one_shots(
     plans,
     now,
   )
+}
+
+pub fn[T : PlatformAdapter] MomEventLoop::tick(
+  self : MomEventLoop,
+  runtime : MomEventWorkspaceRuntime,
+  adapter : T,
+  mom : MomAgent,
+  now : String
+) -> Result[MomEventTickResult, MomEventDispatchError] {
+  let now_ms = match parse_mom_timestamp_ms(now) {
+    Ok(value) => value
+    Err(message) => return Err(RuntimeFailed(message))
+  }
+  let flushed_files = self.flush_due_file_changes(now_ms)
+  let workspace_results =
+    if flushed_files.length() == 0 {
+      []
+    } else {
+      match self.process_workspace(runtime, adapter, mom, now) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+    }
+  let one_shot_results = match self.flush_due_one_shots(runtime, adapter, mom, now) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  Ok({ flushed_files, workspace_results, one_shot_results })
 }
 
 fn[T : PlatformAdapter] dispatch_event_plans_and_cleanup(

@@ -188,6 +188,12 @@ pub(all) struct MomEventLoop {
   periodic_registry : MomPeriodicRegistry
 }
 
+pub(all) struct MomEventTickResult {
+  flushed_files : Array[String]
+  workspace_results : Array[MomEventDispatchResult]
+  one_shot_results : Array[MomEventDispatchResult]
+} derive(Eq)
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)

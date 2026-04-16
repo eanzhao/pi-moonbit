@@ -10,6 +10,15 @@ pub fn MomEventDebounceQueue::list_pending(
   sort_pending_event_files(self.pending.copy())
 }
 
+pub fn MomEventDebounceQueue::next_due_at_ms(
+  self : MomEventDebounceQueue
+) -> UInt64? {
+  match self.list_pending() {
+    [head, .._rest] => Some(head.due_at_ms)
+    [] => None
+  }
+}
+
 pub fn MomEventDebounceQueue::note_change(
   self : MomEventDebounceQueue,
   filename : String,
