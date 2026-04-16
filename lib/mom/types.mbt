@@ -157,6 +157,16 @@ pub(all) struct MomEventHostSync {
   removed_periodics : Array[MomRegisteredPeriodic]
 } derive(Eq)
 
+pub(all) struct MomPendingEventFile {
+  filename : String
+  due_at_ms : UInt64
+} derive(Eq)
+
+pub(all) struct MomEventDebounceQueue {
+  debounce_ms : UInt64
+  mut pending : Array[MomPendingEventFile]
+}
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)

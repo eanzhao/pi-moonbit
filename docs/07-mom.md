@@ -13,6 +13,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_plan.mbt`：按当前时间把 event 文件归类为 trigger / delete / schedule / register
 - `event_host.mbt`：扫描 `workspace/events/`，做 poll-based delta tracking，把 trigger event 翻译成真正的 channel turn，并在成功后清理应删除的 event file
 - `poll_sync(...)`：显式产出 one-shot / periodic 的 added / removed delta，供后续 timer / cron registry 直接消费
+- `event_watch.mbt`：提供 watcher 侧 debounce queue，把抖动的文件变化折叠成稳定的待处理 filename 列表
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -197,7 +198,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 32 个测试，覆盖这些主线：
+`lib/mom` 当前新增 36 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -239,6 +240,13 @@ pub(all) enum MomEvent {
 - immediate / stale event 在处理完成后会走宿主侧 cleanup，避免重启后重复触发
 - `poll_sync(...)` 会显式给出 added / removed one-shot 与 periodic delta
 
+### event_watch_test.mbt
+
+- 重复文件变化会刷新 debounce deadline，而不是重复排队
+- `flush_due(...)` 只返回已到期的 filename
+- 多个 pending 文件会按 due time 和 filename 稳定排序
+- `clear(...)` 可用于宿主取消已无效的待处理事件
+
 ### agent_test.mbt
 
 - `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
@@ -265,7 +273,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、timer-registry delta、trigger dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、timer-registry delta、trigger dispatch、cleanup 与 watcher debounce
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
