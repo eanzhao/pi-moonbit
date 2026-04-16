@@ -138,6 +138,15 @@ pub(all) struct MomEventWorkspaceRuntime {
   read_text : (String) -> Result[String, String]
   list_files : (String) -> Result[Array[String], String]
   read_modified_at : (String) -> Result[String?, String]
+  delete_file : (String) -> Result[Unit, String]
+}
+
+pub(all) struct MomEventHost {
+  workspace_dir : String
+  started_at : String
+  mut observed_plans : Array[(String, MomEventPlan)]
+  mut scheduled_one_shots : Array[MomScheduledOneShot]
+  mut registered_periodics : Array[MomRegisteredPeriodic]
 }
 
 pub(all) enum MomEventDispatchResult {

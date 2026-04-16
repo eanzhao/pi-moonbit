@@ -1,5 +1,5 @@
 struct TestEventWorkspace {
-  files : Array[(String, String, String?)]
+  mut files : Array[(String, String, String?)]
 }
 
 fn TestEventWorkspace::read_text(self : TestEventWorkspace, path : String) -> Result[String, String] {
@@ -40,12 +40,41 @@ fn TestEventWorkspace::read_modified_at(
   Err("missing file: " + path)
 }
 
-fn test_event_workspace_runtime(files : Array[(String, String, String?)]) -> MomEventWorkspaceRuntime {
-  let workspace : TestEventWorkspace = { files: files }
+fn TestEventWorkspace::delete_file(
+  self : TestEventWorkspace,
+  path : String
+) -> Result[Unit, String] {
+  let retained : Array[(String, String, String?)] = []
+  let mut removed = false
+  for item in self.files {
+    let (file_path, _content, _modified_at) = item
+    if file_path == path {
+      removed = true
+    } else {
+      retained.push(item)
+    }
+  }
+  if !removed {
+    return Err("missing file: " + path)
+  }
+  self.files = retained
+  Ok(())
+}
+
+fn test_event_workspace(
+  files : Array[(String, String, String?)]
+) -> Ref[TestEventWorkspace] {
+  Ref::new({ files: files })
+}
+
+fn test_event_workspace_runtime(
+  workspace : Ref[TestEventWorkspace]
+) -> MomEventWorkspaceRuntime {
   MomEventWorkspaceRuntime::new(
-    fn(path) { workspace.read_text(path) },
-    fn(dir) { workspace.list_files(dir) },
-    read_modified_at=fn(path) { workspace.read_modified_at(path) },
+    fn(path) { workspace.val.read_text(path) },
+    fn(dir) { workspace.val.list_files(dir) },
+    read_modified_at=fn(path) { workspace.val.read_modified_at(path) },
+    delete_file=fn(path) { workspace.val.delete_file(path) },
   )
 }
 
@@ -135,7 +164,7 @@ fn event_host_test_users() -> Array[UserInfo] {
 }
 
 test "load_workspace_mom_event_files filters json files and sorts filenames" {
-  let runtime = test_event_workspace_runtime([
+  let workspace = test_event_workspace([
     (
       "/workspace/events/b.json",
       "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"b\"}",
@@ -148,6 +177,7 @@ test "load_workspace_mom_event_files filters json files and sorts filenames" {
     ),
     ("/workspace/events/notes.txt", "ignore", None),
   ])
+  let runtime = test_event_workspace_runtime(workspace)
 
   let files = load_workspace_mom_event_files(runtime, "/workspace").unwrap()
 
@@ -159,7 +189,7 @@ test "load_workspace_mom_event_files filters json files and sorts filenames" {
 }
 
 test "plan_workspace_mom_events uses workspace file metadata" {
-  let runtime = test_event_workspace_runtime([
+  let workspace = test_event_workspace([
     (
       "/workspace/events/a.json",
       "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"stale\"}",
@@ -171,6 +201,7 @@ test "plan_workspace_mom_events uses workspace file metadata" {
       None,
     ),
   ])
+  let runtime = test_event_workspace_runtime(workspace)
 
   let plans = plan_workspace_mom_events(
     runtime,
@@ -290,4 +321,155 @@ test "dispatch_mom_event_plan_with_adapter rejects mismatched adapters" {
     Err(AdapterMismatch(message)) => assert_true(message.contains("discord"))
     _ => fail("expected adapter mismatch")
   }
+}
+
+test "event host poll suppresses unchanged plans and tracks periodic registrations" {
+  let workspace = test_event_workspace([
+    (
+      "/workspace/events/a.json",
+      "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"ping\"}",
+      Some("2026-04-16T12:00:01Z"),
+    ),
+    (
+      "/workspace/events/b.json",
+      "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"check\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      None,
+    ),
+  ])
+  let runtime = test_event_workspace_runtime(workspace)
+  let host = MomEventHost::new("/workspace", "2026-04-16T12:00:00Z")
+
+  let first = host.poll(runtime, "2026-04-16T12:05:00Z").unwrap()
+  assert_eq(first.length(), 2)
+  match first[0] {
+    Trigger(_) => ()
+    _ => fail("expected trigger")
+  }
+  match first[1] {
+    RegisterPeriodic(_) => ()
+    _ => fail("expected periodic registration")
+  }
+  assert_eq(host.list_registered_periodics().length(), 1)
+
+  let second = host.poll(runtime, "2026-04-16T12:05:00Z").unwrap()
+  assert_eq(second.length(), 0)
+  assert_eq(host.list_registered_periodics().length(), 1)
+}
+
+test "event host poll promotes scheduled one-shot to trigger when due" {
+  let workspace = test_event_workspace([
+    (
+      "/workspace/events/reminder.json",
+      "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"remind\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      None,
+    ),
+  ])
+  let runtime = test_event_workspace_runtime(workspace)
+  let host = MomEventHost::new("/workspace", "2026-04-16T12:00:00Z")
+
+  let first = host.poll(runtime, "2026-04-17T09:00:00+08:00").unwrap()
+  assert_eq(first.length(), 1)
+  match first[0] {
+    ScheduleOneShot(value) => assert_eq(value.filename, "reminder.json")
+    _ => fail("expected one-shot scheduling")
+  }
+  assert_eq(host.list_scheduled_one_shots().length(), 1)
+
+  let second = host.poll(runtime, "2026-04-17T10:00:00+08:00").unwrap()
+  assert_eq(second.length(), 1)
+  match second[0] {
+    Trigger(value) => assert_eq(value.filename, "reminder.json")
+    _ => fail("expected trigger")
+  }
+  assert_eq(host.list_scheduled_one_shots().length(), 0)
+
+  let third = host.poll(runtime, "2026-04-17T10:00:00+08:00").unwrap()
+  assert_eq(third.length(), 0)
+}
+
+test "event host poll_and_dispatch suppresses duplicate trigger execution" {
+  let event_workspace = test_event_workspace([
+    (
+      "/workspace/events/daily.json",
+      "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"ping\"}",
+      Some("2026-04-16T12:00:01Z"),
+    ),
+  ])
+  let runtime = test_event_workspace_runtime(event_workspace)
+  let host = MomEventHost::new("/workspace", "2026-04-16T12:00:00Z")
+  let workspace = event_host_test_workspace()
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_host_test_model(),
+    event_host_test_runtime(workspace),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_host_test_channels(),
+    event_host_test_users(),
+  )
+
+  let first = host.poll_and_dispatch(
+    runtime,
+    adapter,
+    mom,
+    "2026-04-16T12:05:00.000Z",
+  ).unwrap()
+  assert_eq(first.length(), 1)
+  match first[0] {
+    Triggered(run_result) => {
+      assert_eq(run_result.assistant_text, "echo:[event]: [EVENT:daily.json:immediate] ping")
+      assert_eq(adapter.sent_messages.length(), 1)
+    }
+    _ => fail("expected triggered result")
+  }
+
+  let second = host.poll_and_dispatch(
+    runtime,
+    adapter,
+    mom,
+    "2026-04-16T12:05:00.000Z",
+  ).unwrap()
+  assert_eq(second.length(), 0)
+  assert_eq(adapter.sent_messages.length(), 1)
+}
+
+test "event host poll_dispatch_and_cleanup removes processed event files" {
+  let event_workspace = test_event_workspace([
+    (
+      "/workspace/events/daily.json",
+      "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"ping\"}",
+      Some("2026-04-16T12:00:01Z"),
+    ),
+    (
+      "/workspace/events/stale.json",
+      "{\"type\":\"immediate\",\"channelId\":\"slack-acme/C123\",\"text\":\"stale\"}",
+      Some("2026-04-16T11:59:59Z"),
+    ),
+  ])
+  let runtime = test_event_workspace_runtime(event_workspace)
+  let host = MomEventHost::new("/workspace", "2026-04-16T12:00:00Z")
+  let workspace = event_host_test_workspace()
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_host_test_model(),
+    event_host_test_runtime(workspace),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_host_test_channels(),
+    event_host_test_users(),
+  )
+
+  let results = host.poll_dispatch_and_cleanup(
+    runtime,
+    adapter,
+    mom,
+    "2026-04-16T12:05:00.000Z",
+  ).unwrap()
+  assert_eq(results.length(), 2)
+  assert_eq(adapter.sent_messages.length(), 1)
+  assert_eq(event_workspace.val.list_files("/workspace/events").unwrap().length(), 0)
 }

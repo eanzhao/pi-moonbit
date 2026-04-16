@@ -11,7 +11,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - sandbox 参数解析与 host/container 路径映射
 - events JSON 解析、序列化与触发消息格式化
 - `event_plan.mbt`：按当前时间把 event 文件归类为 trigger / delete / schedule / register
-- `event_host.mbt`：扫描 `workspace/events/`，把 trigger event 翻译成真正的 channel turn
+- `event_host.mbt`：扫描 `workspace/events/`，做 poll-based delta tracking，把 trigger event 翻译成真正的 channel turn，并在成功后清理应删除的 event file
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -196,7 +196,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 27 个测试，覆盖这些主线：
+`lib/mom` 当前新增 31 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -233,6 +233,9 @@ pub(all) enum MomEvent {
 - `Trigger(...)` 会被翻译成真正的 `ChannelMessage`
 - event target adapter 不匹配时会被宿主层直接拒绝
 - trigger plan 可以直接经由 adapter 驱动 `MomAgent`
+- poll host 会抑制未变化 event 的重复触发
+- future one-shot event 会在到点后从 `ScheduleOneShot(...)` 自然切到 `Trigger(...)`
+- immediate / stale event 在处理完成后会走宿主侧 cleanup，避免重启后重复触发
 
 ### agent_test.mbt
 
@@ -260,7 +263,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描与 trigger dispatch
+- events 解析、planning、workspace 扫描、poll-based state tracking、trigger dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 

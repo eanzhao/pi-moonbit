@@ -1,9 +1,108 @@
 pub fn MomEventWorkspaceRuntime::new(
   read_text : (String) -> Result[String, String],
   list_files : (String) -> Result[Array[String], String],
-  read_modified_at? : (String) -> Result[String?, String] = fn(_path) { Ok(None) }
+  read_modified_at? : (String) -> Result[String?, String] = fn(_path) { Ok(None) },
+  delete_file? : (String) -> Result[Unit, String] = fn(_path) { Ok(()) }
 ) -> MomEventWorkspaceRuntime {
-  { read_text, list_files, read_modified_at }
+  { read_text, list_files, read_modified_at, delete_file }
+}
+
+pub fn MomEventHost::new(
+  workspace_dir : String,
+  started_at : String
+) -> MomEventHost {
+  {
+    workspace_dir,
+    started_at,
+    observed_plans: [],
+    scheduled_one_shots: [],
+    registered_periodics: [],
+  }
+}
+
+pub fn MomEventHost::list_scheduled_one_shots(
+  self : MomEventHost
+) -> Array[MomScheduledOneShot] {
+  self.scheduled_one_shots.copy()
+}
+
+pub fn MomEventHost::list_registered_periodics(
+  self : MomEventHost
+) -> Array[MomRegisteredPeriodic] {
+  self.registered_periodics.copy()
+}
+
+pub fn MomEventHost::poll(
+  self : MomEventHost,
+  runtime : MomEventWorkspaceRuntime,
+  now : String
+) -> Result[Array[MomEventPlan], String] {
+  let plans = match plan_workspace_mom_events(
+    runtime,
+    self.workspace_dir,
+    self.started_at,
+    now,
+  ) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  Ok(self.update_plans(plans))
+}
+
+pub fn[T : PlatformAdapter] MomEventHost::poll_and_dispatch(
+  self : MomEventHost,
+  runtime : MomEventWorkspaceRuntime,
+  adapter : T,
+  mom : MomAgent,
+  now : String
+) -> Result[Array[MomEventDispatchResult], MomEventDispatchError] {
+  let plans = match self.poll(runtime, now) {
+    Ok(value) => value
+    Err(message) => return Err(RuntimeFailed(message))
+  }
+  let results : Array[MomEventDispatchResult] = []
+  for plan in plans {
+    match dispatch_mom_event_plan_with_adapter(adapter, mom, plan, now) {
+      Ok(result) => results.push(result)
+      Err(error) => return Err(error)
+    }
+  }
+  Ok(results)
+}
+
+pub fn[T : PlatformAdapter] MomEventHost::poll_dispatch_and_cleanup(
+  self : MomEventHost,
+  runtime : MomEventWorkspaceRuntime,
+  adapter : T,
+  mom : MomAgent,
+  now : String
+) -> Result[Array[MomEventDispatchResult], MomEventDispatchError] {
+  let plans = match self.poll(runtime, now) {
+    Ok(value) => value
+    Err(message) => return Err(RuntimeFailed(message))
+  }
+  let results : Array[MomEventDispatchResult] = []
+  let cleanup_filenames : Array[String] = []
+  for plan in plans {
+    match dispatch_mom_event_plan_with_adapter(adapter, mom, plan, now) {
+      Ok(result) => {
+        results.push(result)
+        match mom_event_plan_cleanup_filename(plan) {
+          Some(filename) => cleanup_filenames.push(filename)
+          None => ()
+        }
+      }
+      Err(error) => return Err(error)
+    }
+  }
+  for filename in cleanup_filenames {
+    let path = workspace_event_file_path(self.workspace_dir, filename)
+    match (runtime.delete_file)(path) {
+      Ok(_) => ()
+      Err(message) => return Err(RuntimeFailed(message))
+    }
+  }
+  Ok(results)
 }
 
 pub fn load_workspace_mom_event_files(
@@ -113,6 +212,36 @@ pub fn[T : PlatformAdapter] dispatch_mom_event_plan_with_adapter(
   }
 }
 
+fn MomEventHost::update_plans(
+  self : MomEventHost,
+  plans : Array[MomEventPlan]
+) -> Array[MomEventPlan] {
+  let changed : Array[MomEventPlan] = []
+  let next_observed : Array[(String, MomEventPlan)] = []
+  let next_scheduled : Array[MomScheduledOneShot] = []
+  let next_periodic : Array[MomRegisteredPeriodic] = []
+
+  for plan in plans {
+    let filename = mom_event_plan_filename(plan)
+    let previous = find_observed_plan(self.observed_plans, filename)
+    match previous {
+      Some(value) if value == plan => ()
+      _ => changed.push(plan)
+    }
+    next_observed.push((filename, plan))
+    match plan {
+      ScheduleOneShot(value) => next_scheduled.push(value)
+      RegisterPeriodic(value) => next_periodic.push(value)
+      _ => ()
+    }
+  }
+
+  self.observed_plans = next_observed
+  self.scheduled_one_shots = next_scheduled
+  self.registered_periodics = next_periodic
+  changed
+}
+
 fn mom_event_filename(events_dir : String, listed_path : String) -> String {
   let prefix = if events_dir.has_suffix("/") {
     events_dir
@@ -184,4 +313,36 @@ fn mom_event_dispatch_safe_id(value : String) -> String {
     .replace_all(old=":", new="-")
     .replace_all(old=" ", new="-")
     .replace_all(old=".", new="-")
+}
+
+fn find_observed_plan(
+  observed_plans : Array[(String, MomEventPlan)],
+  filename : String
+) -> MomEventPlan? {
+  for item in observed_plans {
+    let (existing_filename, plan) = item
+    if existing_filename == filename {
+      return Some(plan)
+    }
+  }
+  None
+}
+
+fn mom_event_plan_filename(plan : MomEventPlan) -> String {
+  match plan {
+    Trigger(value) => value.filename
+    ScheduleOneShot(value) => value.filename
+    RegisterPeriodic(value) => value.filename
+    Delete(filename) => filename
+    Invalid(filename, _message) => filename
+  }
+}
+
+fn mom_event_plan_cleanup_filename(plan : MomEventPlan) -> String? {
+  match plan {
+    Trigger(value) if value.delete_after => Some(value.filename)
+    Delete(filename) => Some(filename)
+    Invalid(filename, _message) => Some(filename)
+    _ => None
+  }
 }
