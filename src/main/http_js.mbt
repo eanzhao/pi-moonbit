@@ -159,6 +159,51 @@ fn host_anthropic_stream(
   }
 }
 
+///| 发起 Gemini GenerateContent SSE 流式请求并通过 EventHandler 推送事件。
+fn host_gemini_stream(
+  model : @ai.Model,
+  context : @ai.Context,
+  options : @ai.StreamOptions,
+  handler : @ai.EventHandler
+) -> Unit!@ai.StreamError {
+  let api_key = match options.api_key {
+    Some(key) => key
+    None =>
+      match host_env_var("GOOGLE_API_KEY") {
+        Some(key) => key
+        None => host_env_var("GEMINI_API_KEY").unwrap_or("")
+      }
+  }
+  let url = @ai.build_gemini_url(model, api_key)
+  let body = @ai.build_gemini_request_body(model, context, options)
+  let result = host_fetch_sse_ffi(
+    url,
+    body.stringify(escape_slash=false),
+    "",
+    "",
+  )
+  if result.length() == 0 {
+    raise @ai.StreamError("empty response from Gemini")
+  }
+  if result[0] == "err" {
+    let message = if result.length() > 1 { result[1] } else { "unknown error" }
+    raise @ai.StreamError(message)
+  }
+  let state = @ai.GeminiStreamState::new(model)
+  for i = 1; i < result.length(); i = i + 1 {
+    let events = @ai.parse_gemini_sse_line(result[i], state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+  if !state.terminal_emitted {
+    let events = @ai.parse_gemini_sse_line("data: [DONE]", state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+}
+
 ///| 发起 OpenAI 兼容的 SSE 流式请求并通过 EventHandler 推送事件。
 fn host_openai_stream(
   model : @ai.Model,

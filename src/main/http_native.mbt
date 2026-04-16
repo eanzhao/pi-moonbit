@@ -16,6 +16,15 @@ fn host_openai_stream(
   raise @ai.StreamError("OpenAI streaming is not implemented for native target yet")
 }
 
+fn host_gemini_stream(
+  _model : @ai.Model,
+  _context : @ai.Context,
+  _options : @ai.StreamOptions,
+  _handler : @ai.EventHandler
+) -> Unit!@ai.StreamError {
+  raise @ai.StreamError("Gemini streaming is not implemented for native target yet")
+}
+
 fn host_mistral_stream(
   _model : @ai.Model,
   _context : @ai.Context,
