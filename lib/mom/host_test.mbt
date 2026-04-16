@@ -268,3 +268,93 @@ test "in-memory host step drains prior handle operations" {
   }
   assert_eq(second.handle_operations.length(), 0)
 }
+
+test "in-memory host step_with_handle_runtime applies callback operations" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[
+      {
+        filename: "future.json",
+        content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+        modified_at: None,
+      },
+      {
+        filename: "daily.json",
+        content: "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+        modified_at: None,
+      },
+    ],
+  )
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let runtime = CallbackEventHandleRuntime::new(
+    fn(watched_dir) {
+      operations.val.push(SetWatchDir(watched_dir))
+      Ok(())
+    },
+    fn(due_at_ms) {
+      operations.val.push(SetWakeup(due_at_ms))
+      Ok(())
+    },
+    fn(entry) {
+      operations.val.push(RegisterPeriodic(entry))
+      Ok(())
+    },
+    fn(filename) {
+      operations.val.push(RemovePeriodic(filename))
+      Ok(())
+    },
+  )
+
+  let step = host.step_with_handle_runtime(
+    Sync("2026-04-17T09:00:00+08:00"),
+    runtime,
+  ).unwrap()
+
+  assert_eq(step.handle_operations.length(), 3)
+  assert_eq(operations.val.length(), 3)
+  assert_eq(host.list_handle_operations().length(), 0)
+  match operations.val[0] {
+    SetWatchDir(Some(path)) => assert_eq(path, "/workspace/events")
+    _ => fail("expected watch dir callback")
+  }
+  match operations.val[1] {
+    SetWakeup(Some(value)) =>
+      assert_eq(value, parse_mom_timestamp_ms("2026-04-17T10:00:00+08:00").unwrap())
+    _ => fail("expected wakeup callback")
+  }
+  match operations.val[2] {
+    RegisterPeriodic(entry) => assert_eq(entry.filename, "daily.json")
+    _ => fail("expected periodic callback")
+  }
+}
+
+test "run mom host input with callbacks surfaces handle apply failures" {
+  let host = MomInMemoryHost::new(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    event_files=[{
+      filename: "future.json",
+      content: "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"future\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      modified_at: None,
+    }],
+  )
+
+  match run_mom_host_input_with_callbacks(
+    host,
+    Sync("2026-04-17T09:00:00+08:00"),
+    fn(_watched_dir) { Err("watch failed") },
+    fn(_due_at_ms) { Ok(()) },
+    fn(_entry) { Ok(()) },
+    fn(_filename) { Ok(()) },
+  ) {
+    Err(HandleApplyFailed(message)) => assert_eq(message, "watch failed")
+    _ => fail("expected callback apply failure")
+  }
+}

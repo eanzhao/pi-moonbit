@@ -385,6 +385,11 @@ pub(all) struct MomHostStep {
   handle_operations : Array[MomEventHandleOp]
 } derive(Eq)
 
+pub(all) enum MomHostStepError {
+  RunnerFailed(MomRunnerError)
+  HandleApplyFailed(String)
+} derive(Eq)
+
 pub(open) trait MomEventHandleRuntime {
   set_watch_dir(Self, String?) -> Result[Unit, String]
   set_wakeup_due_at_ms(Self, UInt64?) -> Result[Unit, String]

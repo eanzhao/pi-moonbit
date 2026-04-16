@@ -304,6 +304,38 @@ pub fn MomInMemoryHost::step(
   Ok({ result, handle_plan, handle_operations })
 }
 
+pub fn[T : MomEventHandleRuntime] MomInMemoryHost::step_with_handle_runtime(
+  self : MomInMemoryHost,
+  input : MomHostInput,
+  runtime : T
+) -> Result[MomHostStep, MomHostStepError] {
+  let step = match self.step(input) {
+    Ok(value) => value
+    Err(error) => return Err(RunnerFailed(error))
+  }
+  match apply_mom_host_step_handle_operations(runtime, step) {
+    Ok(_) => Ok(step)
+    Err(message) => Err(HandleApplyFailed(message))
+  }
+}
+
+pub fn run_mom_host_input_with_callbacks(
+  host : MomInMemoryHost,
+  input : MomHostInput,
+  set_watch_dir_fn : (String?) -> Result[Unit, String],
+  set_wakeup_due_at_ms_fn : (UInt64?) -> Result[Unit, String],
+  register_periodic_fn : (MomRegisteredPeriodic) -> Result[Unit, String],
+  remove_periodic_fn : (String) -> Result[Unit, String]
+) -> Result[MomHostStep, MomHostStepError] {
+  let runtime = CallbackEventHandleRuntime::new(
+    set_watch_dir_fn,
+    set_wakeup_due_at_ms_fn,
+    register_periodic_fn,
+    remove_periodic_fn,
+  )
+  host.step_with_handle_runtime(input, runtime)
+}
+
 fn in_memory_event_workspace_get(
   workspace : InMemoryEventWorkspace,
   filename : String
