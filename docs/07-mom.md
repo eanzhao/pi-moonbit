@@ -17,6 +17,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `event_watch.mbt`：提供 watcher 侧 debounce queue，把抖动的文件变化折叠成稳定的待处理 filename 列表
 - `event_timer.mbt`：one-shot timer registry，支持 register / remove / flush due
 - `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta
+- `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -42,6 +43,7 @@ lib/mom/
 ├── event_watch.mbt
 ├── event_timer.mbt
 ├── event_periodic.mbt
+├── event_loop.mbt
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
@@ -57,6 +59,7 @@ lib/mom/
 ├── event_watch_test.mbt
 ├── event_timer_test.mbt
 ├── event_periodic_test.mbt
+├── event_loop_test.mbt
 ├── prompt_test.mbt
 └── agent_test.mbt
 ```
@@ -209,7 +212,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 42 个测试，覆盖这些主线：
+`lib/mom` 当前新增 46 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -264,6 +267,13 @@ pub(all) enum MomEvent {
 - one-shot timer registry 支持增删替换、`next_due_at_ms(...)` 和 `flush_due(...)`
 - periodic registry 支持承接 host delta 并稳定维护当前注册集
 
+### event_loop_test.mbt
+
+- workspace sync 会同时更新 host state、one-shot timer registry 和 periodic registry
+- immediate event 会在 loop 中被直接 dispatch 并清理文件
+- 到点的 one-shot timer 会在 loop 中被 flush、dispatch 并清理文件
+- watcher debounce queue 会通过 loop API 暴露给宿主
+
 ### agent_test.mbt
 
 - `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
@@ -290,7 +300,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、trigger dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、trigger dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
@@ -301,6 +311,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - 真实文件下载
 - 真正常驻的 fs watcher / debounce 循环
 - 真实 one-shot timer handle / periodic cron handle 绑定
+- CLI/mock/slack 宿主入口把这些运行时拼起来
 - 真实 bash executor 和容器校验
 
 也就是说，这一版完成的是 mom 的“平台无关运行层”，而不是最终可联网运行的聊天机器人宿主。

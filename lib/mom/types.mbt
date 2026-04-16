@@ -181,6 +181,13 @@ pub(all) struct MomPeriodicRegistry {
   mut entries : Array[MomRegisteredPeriodic]
 }
 
+pub(all) struct MomEventLoop {
+  host : MomEventHost
+  debounce_queue : MomEventDebounceQueue
+  one_shot_registry : MomOneShotTimerRegistry
+  periodic_registry : MomPeriodicRegistry
+}
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)
