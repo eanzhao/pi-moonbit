@@ -103,6 +103,37 @@ pub(all) enum MomEvent {
   Periodic(PeriodicEvent)
 } derive(Eq)
 
+pub(all) struct MomEventFile {
+  filename : String
+  content : String
+  modified_at : String?
+} derive(Eq)
+
+pub(all) struct MomEventTrigger {
+  filename : String
+  event : MomEvent
+  message : String
+  delete_after : Bool
+} derive(Eq)
+
+pub(all) struct MomScheduledOneShot {
+  filename : String
+  event : OneShotEvent
+} derive(Eq)
+
+pub(all) struct MomRegisteredPeriodic {
+  filename : String
+  event : PeriodicEvent
+} derive(Eq)
+
+pub(all) enum MomEventPlan {
+  Trigger(MomEventTrigger)
+  ScheduleOneShot(MomScheduledOneShot)
+  RegisterPeriodic(MomRegisteredPeriodic)
+  Delete(String)
+  Invalid(String, String)
+} derive(Eq)
+
 pub(all) struct ChannelLog {
   adapter : String
   channel_id : String

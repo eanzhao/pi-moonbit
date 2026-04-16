@@ -10,6 +10,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - channel log 到 `SessionManager` 的 context 同步逻辑
 - sandbox 参数解析与 host/container 路径映射
 - events JSON 解析、序列化与触发消息格式化
+- `event_plan.mbt`：按当前时间把 event 文件归类为 trigger / delete / schedule / register
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -29,6 +30,7 @@ lib/mom/
 ├── context.mbt
 ├── sandbox.mbt
 ├── events.mbt
+├── event_plan.mbt
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
@@ -38,6 +40,7 @@ lib/mom/
 ├── context_test.mbt
 ├── sandbox_test.mbt
 ├── events_test.mbt
+├── event_plan_test.mbt
 ├── prompt_test.mbt
 └── agent_test.mbt
 ```
@@ -190,7 +193,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 18 个测试，覆盖七条主线：
+`lib/mom` 当前新增 22 个测试，覆盖八条主线：
 
 ### store_test.mbt
 
@@ -211,6 +214,14 @@ pub(all) enum MomEvent {
 - host 路径能翻译到 `/workspace/...`
 - event JSON 能解析并生成 `[EVENT:...]` 触发文本
 - system prompt 包含 memory、skills、events 与平台无关格式说明
+
+### event_plan_test.mbt
+
+- stale immediate event 会被标记为删除
+- fresh immediate event 会直接触发
+- one-shot event 会按当前时间区分 trigger / schedule
+- periodic event 会登记为宿主侧持续调度
+- 非法 event 文件会保留成 `Invalid(...)` 结果，避免静默吞掉
 
 ### agent_test.mbt
 
@@ -238,7 +249,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析与 prompt 支撑
+- events 解析、planning 与 prompt 支撑
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
@@ -248,6 +259,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - 实时 socket 连接
 - 真实文件下载
 - cron / watcher 调度器
+- `events/` 目录扫描与真正的宿主执行循环
 - 真实 bash executor 和容器校验
 
 也就是说，这一版完成的是 mom 的“平台无关运行层”，而不是最终可联网运行的聊天机器人宿主。
