@@ -198,7 +198,7 @@ fn StreamingDisplay::handle_event(self : StreamingDisplay, event : @agent.AgentE
           if !self.printed_assistant_label {
             let text = streaming_display_extract_text(msg.content)
             if text.length() > 0 {
-              (self.write)(@tui.ansi_assistant_label() + text + "\n")
+              (self.write)(@tui.ansi_assistant_label() + @tui.render_markdown(text, 80) + "\n")
               self.streaming = false
             }
           } else if self.streaming {
