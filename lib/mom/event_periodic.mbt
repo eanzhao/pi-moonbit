@@ -8,6 +8,18 @@ pub fn MomPeriodicRegistry::list_entries(
   sort_registered_periodics(self.entries.copy())
 }
 
+pub fn MomPeriodicRegistry::get(
+  self : MomPeriodicRegistry,
+  filename : String
+) -> MomRegisteredPeriodic? {
+  for entry in self.entries {
+    if entry.filename == filename {
+      return Some(entry)
+    }
+  }
+  None
+}
+
 pub fn MomPeriodicRegistry::apply_sync(
   self : MomPeriodicRegistry,
   sync : MomEventHostSync

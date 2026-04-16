@@ -73,6 +73,29 @@ test "periodic registry apply_sync adds removes and replaces entries" {
   assert_eq(registry.list_entries()[0].filename, "weekly.json")
 }
 
+test "periodic registry get looks up current entry by filename" {
+  let registry = MomPeriodicRegistry::new()
+
+  registry.register({
+    filename: "daily.json",
+    event: {
+      channel_id: "slack-acme/C123",
+      text: "daily",
+      schedule: "0 9 * * 1-5",
+      timezone: "Asia/Singapore",
+    },
+  })
+
+  match registry.get("daily.json") {
+    Some(entry) => assert_eq(entry.event.schedule, "0 9 * * 1-5")
+    None => fail("expected periodic entry")
+  }
+  match registry.get("missing.json") {
+    Some(_) => fail("expected missing periodic entry")
+    None => ()
+  }
+}
+
 fn periodic_test_has_entry(
   entries : Array[MomRegisteredPeriodic],
   filename : String,

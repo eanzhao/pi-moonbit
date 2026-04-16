@@ -349,6 +349,67 @@ test "event loop tick flushes due one-shot timers without workspace changes" {
   assert_eq(event_workspace.val.list_files("/workspace/events").unwrap().length(), 0)
 }
 
+test "event loop dispatch_periodic runs registered periodic through mom" {
+  let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z")
+  let event_workspace = test_loop_workspace([
+    (
+      "/workspace/events/daily.json",
+      "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"daily\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      None,
+    ),
+  ])
+  let runtime = test_loop_runtime(event_workspace)
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_loop_test_model(),
+    event_loop_test_agent_runtime(),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_loop_test_channels(),
+    event_loop_test_users(),
+  )
+
+  ignore(loop_.sync_workspace(runtime, "2026-04-16T12:05:00.000Z").unwrap())
+  let result = loop_.dispatch_periodic(
+    "daily.json",
+    adapter,
+    mom,
+    "2026-04-16T12:05:00.000Z",
+  ).unwrap()
+
+  match result {
+    Triggered(run) =>
+      assert_eq(
+        run.assistant_text,
+        "echo:[event]: [EVENT:daily.json:periodic:0 9 * * 1-5] daily",
+      )
+    _ => fail("expected periodic dispatch to trigger mom")
+  }
+  assert_eq(adapter.sent_messages.length(), 1)
+}
+
+test "event loop dispatch_periodic rejects unknown filenames" {
+  let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z")
+  let mom = MomAgent::new(MomAgentConfig::new(
+    "/workspace",
+    SandboxConfig::Host,
+    event_loop_test_model(),
+    event_loop_test_agent_runtime(),
+  ))
+  let adapter = InMemoryPlatformAdapter::new(
+    "slack-acme",
+    event_loop_test_channels(),
+    event_loop_test_users(),
+  )
+
+  match loop_.dispatch_periodic("missing.json", adapter, mom, "2026-04-16T12:05:00.000Z") {
+    Err(MissingPeriodic(filename)) => assert_eq(filename, "missing.json")
+    _ => fail("expected missing periodic error")
+  }
+}
+
 test "event loop forwards debounce queue operations" {
   let loop_ = MomEventLoop::new("/workspace", "2026-04-16T12:00:00Z", debounce_ms=100UL)
 

@@ -204,6 +204,7 @@ pub(all) enum MomEventDispatchResult {
 
 pub(all) enum MomEventDispatchError {
   RuntimeFailed(String)
+  MissingPeriodic(String)
   InvalidChannelId(String)
   AdapterMismatch(String)
   AgentFailed(MomAgentError)

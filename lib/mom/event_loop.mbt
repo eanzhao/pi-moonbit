@@ -134,6 +134,31 @@ pub fn[T : PlatformAdapter] MomEventLoop::flush_due_one_shots(
   )
 }
 
+pub fn[T : PlatformAdapter] MomEventLoop::dispatch_periodic(
+  self : MomEventLoop,
+  filename : String,
+  adapter : T,
+  mom : MomAgent,
+  now : String
+) -> Result[MomEventDispatchResult, MomEventDispatchError] {
+  let registered = match self.periodic_registry.get(filename) {
+    Some(value) => value
+    None => return Err(MissingPeriodic(filename))
+  }
+  let event = MomEvent::Periodic(registered.event)
+  dispatch_mom_event_plan_with_adapter(
+    adapter,
+    mom,
+    Trigger({
+      filename: registered.filename,
+      event,
+      message: build_event_trigger_message(registered.filename, event),
+      delete_after: false,
+    }),
+    now,
+  )
+}
+
 pub fn[T : PlatformAdapter] MomEventLoop::tick(
   self : MomEventLoop,
   runtime : MomEventWorkspaceRuntime,

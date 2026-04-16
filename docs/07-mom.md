@@ -16,8 +16,8 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - `poll_sync(...)`：显式产出 one-shot / periodic 的 added / removed delta，供后续 timer / cron registry 直接消费
 - `event_watch.mbt`：提供 watcher 侧 debounce queue，把抖动的文件变化折叠成稳定的待处理 filename 列表
 - `event_timer.mbt`：one-shot timer registry，支持 register / remove / flush due
-- `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta
-- `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)`
+- `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta，并支持按 filename 查当前注册项
+- `event_loop.mbt`：把 host sync、debounce queue、timer registry、periodic registry 收成一个可直接驱动宿主的 event loop，并暴露 `next_due_at_ms(...)` / `tick(...)` / `dispatch_periodic(...)`
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -212,7 +212,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 50 个测试，覆盖这些主线：
+`lib/mom` 当前新增 53 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -266,7 +266,7 @@ pub(all) enum MomEvent {
 
 - ISO timestamp 会被规范化到统一毫秒时间线
 - one-shot timer registry 支持增删替换、`next_due_at_ms(...)` 和 `flush_due(...)`
-- periodic registry 支持承接 host delta 并稳定维护当前注册集
+- periodic registry 支持承接 host delta、按 filename 查找并稳定维护当前注册集
 
 ### event_loop_test.mbt
 
@@ -275,6 +275,7 @@ pub(all) enum MomEvent {
 - 到点的 one-shot timer 会在 loop 中被 flush、dispatch 并清理文件
 - `next_due_at_ms(...)` 会返回 debounce queue 和 one-shot timer 里的最早唤醒点
 - `tick(...)` 会把 due file change 和 due one-shot timer 收成一次宿主轮询
+- `dispatch_periodic(...)` 可让 cron callback 直接按 registry filename 驱动 `MomAgent`
 - watcher debounce queue 会通过 loop API 暴露给宿主
 
 ### agent_test.mbt
@@ -303,7 +304,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、trigger dispatch 与 cleanup
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、event loop 编排、trigger dispatch、periodic callback dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
