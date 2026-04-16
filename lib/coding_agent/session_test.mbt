@@ -97,21 +97,15 @@ test "agent session wires extension before_tool_call hook" {
     },
   }
 
-  let extension_runtime = ExtensionRuntime::new(extensions=[
-    {
-      name: "block-echo",
-      tools: [],
-      on_start: None,
-      before_tool_call: Some(fn(tool_context, _context) {
-        if tool_context.tool_call.name == "echo" {
-          Some(@agent.BeforeToolCallResult::block(reason="blocked by extension"))
-        } else {
-          None
-        }
-      }),
-      after_tool_call: None,
-    },
-  ])
+  let mut blocker = CodingExtension::empty("block-echo")
+  blocker = { ..blocker, before_tool_call: Some(fn(tool_context, _context) {
+    if tool_context.tool_call.name == "echo" {
+      Some(@agent.BeforeToolCallResult::block(reason="blocked by extension"))
+    } else {
+      None
+    }
+  }) }
+  let extension_runtime = ExtensionRuntime::new(extensions=[blocker])
   let session = AgentSession::new(
     session_test_model(),
     tools=[echo_tool],
@@ -153,4 +147,104 @@ test "agent session wires extension before_tool_call hook" {
     }
     _ => fail("expected tool result message")
   }
+}
+
+test "extension on_message hook receives all messages" {
+  let seen : Array[String] = []
+  let mut ext = CodingExtension::empty("observer")
+  ext = { ..ext, on_message: Some(fn(message, _context) {
+    match message {
+      @ai.Message::User(u) =>
+        match u.content[0] {
+          @ai.ContentBlock::Text(text) => seen.push("user:" + text)
+          _ => ()
+        }
+      @ai.Message::Assistant(a) =>
+        match a.content[0] {
+          @ai.ContentBlock::Text(text) => seen.push("assistant:" + text)
+          _ => ()
+        }
+      _ => ()
+    }
+  }) }
+  let session = AgentSession::new(
+    session_test_model(),
+    extensions=ExtensionRuntime::new(extensions=[ext]),
+  ).unwrap()
+  session.agent.set_stream_fn(@agent.AgentStreamFn(fn(_model, _context, _options, handler) {
+    let message = session_test_assistant_message([@ai.ContentBlock::Text("reply")])
+    handler.0(@ai.AssistantMessageEvent::Done(@ai.StopReason::Stop, message))
+    Ok(())
+  }))
+  ignore(session.prompt_text("hello"))
+  assert_true(seen.contains("assistant:reply"))
+}
+
+test "extension command registration and execution" {
+  let executed : Ref[String] = Ref::new("")
+  let mut ext = CodingExtension::empty("cmd-ext")
+  ext = { ..ext, commands: [{
+    name: "greet",
+    description: "Say hello",
+    handler: fn(args, _ctx, _actions) {
+      executed.val = "greeted:" + args
+      Ok(())
+    },
+  }] }
+  let session = AgentSession::new(
+    session_test_model(),
+    extensions=ExtensionRuntime::new(extensions=[ext]),
+  ).unwrap()
+  let commands = session.get_extension_commands()
+  assert_eq(commands.length(), 1)
+  assert_eq(commands[0].name, "greet")
+  let result = session.run_extension_command("greet", "world")
+  assert_true(result is Ok(_))
+  assert_eq(executed.val, "greeted:world")
+  let err = session.run_extension_command("unknown", "")
+  assert_true(err is Err(_))
+}
+
+test "extension actions can inject messages and change model" {
+  let injected : Ref[Bool] = Ref::new(false)
+  let mut ext = CodingExtension::empty("action-ext")
+  ext = { ..ext, on_start: Some(fn(_ctx, actions) {
+    ignore((actions.send_message)("note", [@ai.ContentBlock::Text("injected")]))
+    let model = (actions.get_model)()
+    if model.id != "mock" {
+      return Err("unexpected model id: " + model.id)
+    }
+    injected.val = true
+    Ok(())
+  }) }
+  let session = AgentSession::new(
+    session_test_model(),
+    extensions=ExtensionRuntime::new(extensions=[ext]),
+  ).unwrap()
+  assert_true(injected.val)
+  let context = session.build_session_context()
+  assert_true(context.messages.length() > 0)
+}
+
+test "extension transform_context modifies LLM messages" {
+  let mut ext = CodingExtension::empty("ctx-transform")
+  ext = { ..ext, transform_context: Some(fn(messages, _ctx) {
+    let result = messages.copy()
+    result.push(@ai.Message::User({ content: [@ai.ContentBlock::Text("extra context")] }))
+    result
+  }) }
+  let session = AgentSession::new(
+    session_test_model(),
+    extensions=ExtensionRuntime::new(extensions=[ext]),
+  ).unwrap()
+  let seen_context : Ref[Array[@ai.Message]] = Ref::new([])
+  session.agent.set_stream_fn(@agent.AgentStreamFn(fn(_model, context, _options, handler) {
+    seen_context.val = context.messages.copy()
+    let message = session_test_assistant_message([@ai.ContentBlock::Text("ok")])
+    handler.0(@ai.AssistantMessageEvent::Done(@ai.StopReason::Stop, message))
+    Ok(())
+  }))
+  ignore(session.prompt_text("hello"))
+  let last_msg = seen_context.val[seen_context.val.length() - 1]
+  assert_eq(session_message_text(last_msg), "extra context")
 }

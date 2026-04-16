@@ -41,6 +41,7 @@ fn create_cli_app(
         session_manager=startup.session_manager,
         tools=tools,
         extensions=extensions,
+        cwd=startup.cwd,
       ) {
         Err(message) => Err(message)
         Ok(session) => {
@@ -392,12 +393,8 @@ fn create_default_tools(
 }
 
 fn cli_bash_history_extension() -> @coding_agent.CodingExtension {
-  {
-    name: "cli-bash-history",
-    tools: [],
-    on_start: None,
-    before_tool_call: None,
-    after_tool_call: Some(fn(tool_context, context) {
+  let mut ext = @coding_agent.CodingExtension::empty("cli-bash-history")
+  ext = { ..ext, after_tool_call: Some(fn(tool_context, context) {
       if tool_context.tool_call.name != "bash" {
         return None
       }
@@ -417,8 +414,8 @@ fn cli_bash_history_extension() -> @coding_agent.CodingExtension {
         full_output_path~,
       ))
       None
-    }),
-  }
+    }) }
+  ext
 }
 
 fn new_session_manager(runtime : CliHostRuntime) -> @coding_agent.SessionManager {

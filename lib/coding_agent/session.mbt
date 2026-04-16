@@ -3,6 +3,7 @@ pub(all) struct AgentSession {
   agent : @agent.Agent
   session_manager : SessionManager
   extensions : ExtensionRuntime
+  mut cwd : String
   mut agent_listener : @agent.ListenerHandle?
 }
 
@@ -14,6 +15,7 @@ pub fn AgentSession::new(
   session_manager? : SessionManager = SessionManager::new(),
   tools? : Array[@agent.AgentTool] = [],
   extensions? : ExtensionRuntime = ExtensionRuntime::new(),
+  cwd? : String = "."
 ) -> Result[AgentSession, String] {
   let loaded_context = session_manager.build_session_context()
   let effective_model = match loaded_context.model {
@@ -35,13 +37,13 @@ pub fn AgentSession::new(
     agent,
     session_manager,
     extensions,
+    cwd,
     agent_listener: None,
   }
   session.bind_agent()
-  match session.extensions.run_start({
-    session_manager: session.session_manager,
-    agent: session.agent,
-  }) {
+  let ctx = session.make_extension_context()
+  let actions = session.make_extension_actions()
+  match session.extensions.run_start(ctx, actions) {
     Ok(_) => Ok(session)
     Err(message) => Err(message)
   }
@@ -169,33 +171,83 @@ pub fn AgentSession::build_session_context(self : AgentSession) -> SessionContex
   self.session_manager.build_session_context()
 }
 
+///| 获取所有扩展注册的命令。
+pub fn AgentSession::get_extension_commands(self : AgentSession) -> Array[ExtensionCommand] {
+  self.extensions.collect_commands()
+}
+
+///| 执行一个扩展命令。
+pub fn AgentSession::run_extension_command(
+  self : AgentSession,
+  name : String,
+  args : String
+) -> Result[Unit, String] {
+  let commands = self.extensions.collect_commands()
+  for command in commands {
+    if command.name == name {
+      return (command.handler)(args, self.make_extension_context(), self.make_extension_actions())
+    }
+  }
+  Err("unknown command: " + name)
+}
+
 fn AgentSession::bind_agent(self : AgentSession) -> Unit {
-  self.agent.set_transform_context(fn(_messages) {
-    self.session_manager.build_session_context().messages
+  self.agent.set_transform_context(fn(messages) {
+    let ctx = self.make_extension_context()
+    let session_messages = self.session_manager.build_session_context().messages
+    self.extensions.transform_context(session_messages, ctx)
   })
   self.agent.set_before_tool_call(fn(tool_context) {
-    self.extensions.before_tool_call(tool_context, {
-      session_manager: self.session_manager,
-      agent: self.agent,
-    })
+    self.extensions.before_tool_call(tool_context, self.make_extension_context())
   })
   self.agent.set_after_tool_call(fn(tool_context) {
-    self.extensions.after_tool_call(tool_context, {
-      session_manager: self.session_manager,
-      agent: self.agent,
-    })
+    self.extensions.after_tool_call(tool_context, self.make_extension_context())
   })
   self.agent_listener = Some(self.agent.subscribe(fn(event) {
-    self.persist_agent_event(event)
+    self.handle_agent_event(event)
   }))
 }
 
-fn AgentSession::persist_agent_event(self : AgentSession, event : @agent.AgentEvent) -> Unit {
+fn AgentSession::handle_agent_event(self : AgentSession, event : @agent.AgentEvent) -> Unit {
+  let ctx = self.make_extension_context()
   match event {
     @agent.AgentEvent::MessageEnd(message) => {
       let _ = self.session_manager.append_message(message)
+      self.extensions.notify_message(message, ctx)
     }
+    @agent.AgentEvent::AgentStart =>
+      self.extensions.notify_agent_start(ctx)
+    @agent.AgentEvent::AgentEnd(messages) =>
+      self.extensions.notify_agent_end(messages, ctx)
     _ => ()
+  }
+}
+
+fn AgentSession::make_extension_context(self : AgentSession) -> ExtensionContext {
+  { session_manager: self.session_manager, agent: self.agent, cwd: self.cwd }
+}
+
+fn AgentSession::make_extension_actions(self : AgentSession) -> ExtensionActions {
+  {
+    send_message: fn(custom_type, content) {
+      self.session_manager.append_custom_message(custom_type, content)
+    },
+    steer: fn(text) { self.agent.steer(user_text_message(text)) },
+    follow_up: fn(text) { self.agent.follow_up(user_text_message(text)) },
+    append_entry: fn(custom_type, data) {
+      self.session_manager.append_custom_entry(custom_type, data~)
+    },
+    get_model: fn() { self.agent.state.model },
+    set_model: fn(model) {
+      self.agent.state.model = model
+      ignore(self.session_manager.append_model_change(model))
+    },
+    get_thinking_level: fn() { self.agent.state.thinking_level },
+    set_thinking_level: fn(level) {
+      self.agent.state.thinking_level = level
+      ignore(self.session_manager.append_thinking_level_change(level))
+    },
+    is_idle: fn() { !self.agent.state.is_streaming },
   }
 }
 
