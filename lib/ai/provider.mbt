@@ -1,5 +1,5 @@
 ///| 流式传输过程中的错误。
-pub suberror StreamError {
+pub(all) suberror StreamError {
   StreamError(String)
 } derive(Show)
 

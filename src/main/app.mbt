@@ -46,7 +46,15 @@ fn create_cli_app(
         Ok(session) => {
           match runtime.agent_stream {
             Some(stream_fn) => session.agent.set_stream_fn(stream_fn)
-            None => ()
+            None =>
+              session.agent.set_stream_fn(@agent.AgentStreamFn(fn(model, context, options, handler) {
+                try {
+                  host_openai_stream(model, context, options, handler)
+                  Ok(())
+                } catch {
+                  @ai.StreamError(message) => Err(message)
+                }
+              }))
           }
           Ok(Ready({
             session,
@@ -378,6 +386,8 @@ fn create_default_tools(
     @coding_agent.create_write_tool(workspace_runtime),
     @coding_agent.create_edit_tool(workspace_runtime),
     @coding_agent.create_bash_tool(command_runtime),
+    @coding_agent.create_grep_tool(workspace_runtime),
+    @coding_agent.create_ls_tool(command_runtime),
   ]
 }
 

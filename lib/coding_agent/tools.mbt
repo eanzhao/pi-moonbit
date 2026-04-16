@@ -87,26 +87,34 @@ pub fn create_write_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
   }
 }
 
-///| 创建 edit tool。
+///| 创建 edit tool，支持 replace_all 参数。
 pub fn create_edit_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
   {
     name: "edit",
     label: "Edit",
-    description: "Replace the first matching text chunk in a file",
+    description: "Replace matching text in a file. Set replace_all to true to replace all occurrences.",
     parameters: tool_parameters(["path", "old_text", "new_text"]),
     prepare_arguments: None,
     validate_arguments: Some(validate_edit_arguments),
     execute: fn(_tool_call_id, args, _on_update) {
       match edit_arguments(args) {
         Err(message) => Err(message)
-        Ok((path, old_text, new_text)) =>
+        Ok((path, old_text, new_text)) => {
+          let replace_all = match args {
+            Object({ "replace_all": True, .. }) => true
+            _ => false
+          }
           match (runtime.read_text)(path) {
             Err(message) => Err(message)
             Ok(content) => {
               if !content.contains(old_text) {
                 return Err("Text to replace was not found in \{path}")
               }
-              let next_content = content.replace(old=old_text, new=new_text)
+              let next_content = if replace_all {
+                replace_all_occurrences(content, old_text, new_text)
+              } else {
+                content.replace(old=old_text, new=new_text)
+              }
               match (runtime.write_text)(path, next_content) {
                 Err(message) => Err(message)
                 Ok(_) =>
@@ -116,11 +124,13 @@ pub fn create_edit_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
                       "path": Json::string(path),
                       "old_length": Json::number(old_text.length().to_double()),
                       "new_length": Json::number(new_text.length().to_double()),
+                      "replace_all": Json::boolean(replace_all),
                     }),
                   })
               }
             }
           }
+        }
       }
     },
   }
@@ -243,6 +253,114 @@ fn bash_argument(args : Json) -> Result[String, String] {
     return Err("missing command")
   }
   Ok(command)
+}
+
+///| 创建 grep tool — 在文件内容中搜索文本模式。
+pub fn create_grep_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
+  {
+    name: "grep",
+    label: "Grep",
+    description: "Search for a text pattern in a file. Returns matching lines with line numbers.",
+    parameters: tool_parameters(["path", "pattern"]),
+    prepare_arguments: None,
+    validate_arguments: None,
+    execute: fn(_tool_call_id, args, _on_update) {
+      guard args is Object({ "path": String(path), "pattern": String(pattern), .. }) else {
+        return Err("missing path or pattern")
+      }
+      match (runtime.read_text)(path) {
+        Err(message) => Err(message)
+        Ok(content) => {
+          let lines : Array[String] = []
+          for line in content.split("\n") {
+            lines.push(line.to_string())
+          }
+          let matches : Array[String] = []
+          let pattern_lower = pattern.to_lower()
+          for i = 0; i < lines.length(); i = i + 1 {
+            if lines[i].to_lower().contains(pattern_lower) {
+              matches.push("\{i + 1}: \{lines[i]}")
+            }
+          }
+          if matches.length() == 0 {
+            Ok({
+              content: [@ai.ContentBlock::Text("No matches found for '\{pattern}' in \{path}")],
+              details: Json::object({
+                "path": Json::string(path),
+                "pattern": Json::string(pattern),
+                "match_count": Json::number(0.0),
+              }),
+            })
+          } else {
+            let result_text = matches.join("\n")
+            Ok({
+              content: [@ai.ContentBlock::Text(result_text)],
+              details: Json::object({
+                "path": Json::string(path),
+                "pattern": Json::string(pattern),
+                "match_count": Json::number(matches.length().to_double()),
+              }),
+            })
+          }
+        }
+      }
+    },
+  }
+}
+
+///| 创建 ls tool — 列出目录内容。
+pub fn create_ls_tool(command_runtime : CommandRuntime) -> @agent.AgentTool {
+  {
+    name: "ls",
+    label: "List",
+    description: "List files and directories. Runs `ls -la` on the given path.",
+    parameters: tool_parameters(["path"]),
+    prepare_arguments: None,
+    validate_arguments: None,
+    execute: fn(_tool_call_id, args, _on_update) {
+      guard args is Object({ "path": String(path), .. }) else {
+        return Err("missing path")
+      }
+      match (command_runtime.run)("ls -la " + shell_quote(path)) {
+        Err(message) => Err(message)
+        Ok(execution) => {
+          let text = if execution.stdout.length() > 0 {
+            execution.stdout
+          } else if execution.stderr.length() > 0 {
+            execution.stderr
+          } else {
+            "(empty directory)"
+          }
+          if execution.exit_code != 0 {
+            Err(text)
+          } else {
+            Ok({
+              content: [@ai.ContentBlock::Text(text)],
+              details: Json::object({
+                "path": Json::string(path),
+              }),
+            })
+          }
+        }
+      }
+    },
+  }
+}
+
+fn shell_quote(s : String) -> String {
+  "'" + s.replace(old="'", new="'\\''") + "'"
+}
+
+fn replace_all_occurrences(text : String, old_text : String, new_text : String) -> String {
+  let mut result = text
+  while result.contains(old_text) {
+    let next = result.replace(old=old_text, new=new_text)
+    if next == result {
+      break
+    }
+    result = next
+  }
+  result
 }
 
 fn bash_tool_output_text(command : String, execution : CommandExecutionResult) -> String {

@@ -57,6 +57,27 @@ test "edit tool replaces the first matching chunk" {
   assert_true(missing_result is Err(_))
 }
 
+test "edit tool replace_all replaces all occurrences" {
+  let workspace = Ref::new(InMemoryWorkspace::new(files=[
+    { path: "multi.txt", content: "aaa bbb aaa ccc aaa" },
+  ]))
+  let runtime = in_memory_workspace_runtime(workspace)
+  let edit_tool = create_edit_tool(runtime)
+
+  let result = (edit_tool.execute)(
+    "tool-edit-all",
+    Json::object({
+      "path": Json::string("multi.txt"),
+      "old_text": Json::string("aaa"),
+      "new_text": Json::string("xxx"),
+      "replace_all": Json::boolean(true),
+    }),
+    @agent.AgentToolUpdateHandler(fn(_partial) { }),
+  )
+  assert_true(result is Ok(_))
+  assert_eq(workspace.val.get_content("multi.txt"), Some("xxx bbb xxx ccc xxx"))
+}
+
 test "bash tool surfaces non-zero exit code as error" {
   let bash_tool = create_bash_tool({
     run: fn(command) {
@@ -78,4 +99,29 @@ test "bash tool surfaces non-zero exit code as error" {
   )
   assert_true(result is Err(_))
   assert_true(result.unwrap_err().contains("code 1"))
+}
+
+test "grep tool finds matching lines with line numbers" {
+  let workspace = Ref::new(InMemoryWorkspace::new(files=[
+    { path: "code.mbt", content: "fn main {\n  println(\"hello\")\n  let x = 42\n  println(\"world\")\n}" },
+  ]))
+  let runtime = in_memory_workspace_runtime(workspace)
+  let grep_tool = create_grep_tool(runtime)
+
+  let result = (grep_tool.execute)(
+    "tool-grep",
+    Json::object({
+      "path": Json::string("code.mbt"),
+      "pattern": Json::string("println"),
+    }),
+    @agent.AgentToolUpdateHandler(fn(_partial) { }),
+  )
+  assert_true(result is Ok(_))
+  let text = match result.unwrap().content[0] {
+    @ai.ContentBlock::Text(text) => text
+    _ => ""
+  }
+  assert_true(text.contains("2:"))
+  assert_true(text.contains("4:"))
+  assert_true(text.contains("println"))
 }

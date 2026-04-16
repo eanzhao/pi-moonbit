@@ -13,5 +13,8 @@ options(
     "host_js.mbt": [ "js" ],
     "host_native.mbt": [ "native", "llvm" ],
     "host_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "http_js.mbt": [ "js" ],
+    "http_native.mbt": [ "native", "llvm" ],
+    "http_wasm.mbt": [ "wasm", "wasm-gc" ],
   },
 )
