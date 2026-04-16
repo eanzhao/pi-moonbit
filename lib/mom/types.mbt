@@ -188,6 +188,20 @@ pub(all) struct MomEventLoop {
   periodic_registry : MomPeriodicRegistry
 }
 
+pub(all) struct MomEventHandleState {
+  watched_dir : String?
+  wakeup_due_at_ms : UInt64?
+  registered_periodics : Array[MomRegisteredPeriodic]
+} derive(Eq)
+
+pub(all) struct MomEventHandlePlan {
+  state : MomEventHandleState
+  watch_changed : Bool
+  wakeup_changed : Bool
+  added_periodics : Array[MomRegisteredPeriodic]
+  removed_periodics : Array[MomRegisteredPeriodic]
+} derive(Eq)
+
 pub(all) struct MomEventTickResult {
   flushed_files : Array[String]
   workspace_results : Array[MomEventDispatchResult]
