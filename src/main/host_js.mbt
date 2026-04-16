@@ -49,6 +49,39 @@ extern "js" fn host_file_exists(path : String) -> Bool =
   #|   return fs.existsSync(path);
   #| }
 
+extern "js" fn host_list_files_ffi(path : String) -> Array[String] =
+  #| function(path) {
+  #|   const fs = require("node:fs");
+  #|   const nodePath = require("node:path");
+  #|   try {
+  #|     if (!fs.existsSync(path)) {
+  #|       return ["ok"];
+  #|     }
+  #|     const stat = fs.statSync(path);
+  #|     if (!stat.isDirectory()) {
+  #|       return ["err", "not a directory: " + path];
+  #|     }
+  #|     const entries = fs.readdirSync(path, { withFileTypes: true })
+  #|       .filter((entry) => entry.isFile())
+  #|       .map((entry) => nodePath.join(path, entry.name));
+  #|     return ["ok", ...entries];
+  #|   } catch (error) {
+  #|     return ["err", error && error.message ? String(error.message) : String(error)];
+  #|   }
+  #| }
+
+fn host_list_files(path : String) -> Result[Array[String], String] {
+  let result = host_list_files_ffi(path)
+  if result.length() >= 2 && result[0] == "err" {
+    return Err(result[1])
+  }
+  let files : Array[String] = []
+  for i in 1..<result.length() {
+    files.push(result[i])
+  }
+  Ok(files)
+}
+
 extern "js" fn host_run_command_ffi(command : String, cwd : String) -> Array[String] =
   #| function(command, cwd) {
   #|   const childProcess = require("node:child_process");

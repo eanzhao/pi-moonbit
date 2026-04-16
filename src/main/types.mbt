@@ -7,7 +7,10 @@ pub(all) struct CliConfig {
   mode : CliMode
   system_prompt : String
   session_path : String?
+  session_dir : String?
   persist_session : Bool
+  continue_session : Bool
+  resume_session : Bool
   cwd : String
   model : @ai.Model
   thinking_level : @agent.AgentThinkingLevel
@@ -23,6 +26,7 @@ pub(all) struct CliHostRuntime {
   read_text : (String) -> Result[String, String]
   write_text : (String, String) -> Result[Unit, String]
   file_exists : (String) -> Bool
+  list_files : (String) -> Result[Array[String], String]
   run_command : (String, String) -> Result[@coding_agent.CommandExecutionResult, String]
   stdout_write : (String) -> Unit
   stderr_write : (String) -> Unit
@@ -50,6 +54,17 @@ pub(all) struct LoadedSession {
   cwd : String
   session_manager : @coding_agent.SessionManager
 }
+
+pub(all) struct SessionInfo {
+  path : String
+  session_id : String
+  cwd : String
+  timestamp : String
+  parent_session : String?
+  leaf_id : String?
+  entry_count : Int
+  preview : String
+} derive(Eq)
 
 pub(all) struct CliApp {
   session : @coding_agent.AgentSession

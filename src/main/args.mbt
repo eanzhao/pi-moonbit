@@ -4,8 +4,11 @@ pub fn parse_cli_args(
 ) -> Result[CliParseResult, String] {
   let mut mode = CliMode::Interactive
   let mut system_prompt = default_system_prompt()
-  let mut session_path : String? = None
+  let mut session_path_arg : String? = None
+  let mut session_dir_arg : String? = None
   let mut persist_session = true
+  let mut continue_session = false
+  let mut resume_session = false
   let mut effective_cwd = cwd
   let mut model_id = "mock-cli"
   let mut provider_id = "openai"
@@ -26,15 +29,25 @@ pub fn parse_cli_args(
       }
       i = i + 1
       system_prompt = argv[i]
+    } else if arg == "--continue" || arg == "-c" {
+      continue_session = true
+    } else if arg == "--resume" || arg == "-r" {
+      resume_session = true
     } else if arg == "--session" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --session")
       }
       i = i + 1
-      session_path = Some(resolve_cli_path(effective_cwd, argv[i]))
+      session_path_arg = Some(argv[i])
+    } else if arg == "--session-dir" {
+      guard i + 1 < argv.length() else {
+        return Err("missing value for --session-dir")
+      }
+      i = i + 1
+      session_dir_arg = Some(argv[i])
     } else if arg == "--no-session" {
       persist_session = false
-      session_path = None
+      session_path_arg = None
     } else if arg == "--cwd" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --cwd")
@@ -76,8 +89,30 @@ pub fn parse_cli_args(
     i = i + 1
   }
 
+  let session_path = match session_path_arg {
+    Some(path) => Some(resolve_cli_path(effective_cwd, path))
+    None => None
+  }
+  let session_dir = match session_dir_arg {
+    Some(path) => Some(resolve_cli_path(effective_cwd, path))
+    None => None
+  }
+
   if !persist_session && session_path is Some(_) {
     return Err("--session and --no-session cannot be used together")
+  }
+  if !persist_session && continue_session {
+    return Err("--continue and --no-session cannot be used together")
+  }
+  if !persist_session && resume_session {
+    return Err("--resume and --no-session cannot be used together")
+  }
+  let session_mode_count =
+    cli_bool_to_int(session_path is Some(_)) +
+    cli_bool_to_int(continue_session) +
+    cli_bool_to_int(resume_session)
+  if session_mode_count > 1 {
+    return Err("--session, --continue, and --resume cannot be used together")
   }
   if mode == CliMode::Print && messages.length() == 0 {
     return Err("print mode requires at least one message")
@@ -87,7 +122,10 @@ pub fn parse_cli_args(
     mode,
     system_prompt,
     session_path,
+    session_dir,
     persist_session,
+    continue_session,
+    resume_session,
     cwd: effective_cwd,
     model: cli_model(model_id, provider_id, api_id, thinking_level),
     thinking_level,
@@ -110,7 +148,10 @@ pub fn cli_help_text() -> String {
     "  -h, --help                 Show this help",
     "  -p, --print                Run prompts and exit",
     "  --system-prompt <text>     Override the system prompt",
+    "  -c, --continue             Continue the most recent saved session",
+    "  -r, --resume               Choose a saved session to resume",
     "  --session <path>           Persist or resume a JSONL session file",
+    "  --session-dir <path>       Directory used for multi-session storage",
     "  --no-session               Disable session persistence",
     "  --cwd <path>               Override working directory for tools",
     "  --model <id>               Set model id",
@@ -185,4 +226,8 @@ fn is_absolute_path(path : String) -> Bool {
   path.has_prefix("\\") ||
   (path.length() >= 3 && (path[1:3] == ":/" || path[1:3] == ":\\")) ||
   path.has_prefix("~")
+}
+
+fn cli_bool_to_int(value : Bool) -> Int {
+  if value { 1 } else { 0 }
 }

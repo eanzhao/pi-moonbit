@@ -10,6 +10,10 @@ fn host_file_exists(_path : String) -> Bool {
   false
 }
 
+fn host_list_files(_path : String) -> Result[Array[String], String] {
+  Err("host directory listing is not implemented for native target yet")
+}
+
 fn host_run_command(
   _command : String,
   _cwd : String

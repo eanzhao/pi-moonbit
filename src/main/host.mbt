@@ -3,6 +3,7 @@ pub fn default_host_runtime() -> CliHostRuntime {
     read_text: host_read_text,
     write_text: host_write_text,
     file_exists: host_file_exists,
+    list_files: host_list_files,
     run_command: host_run_command,
     stdout_write: host_stdout_write,
     stderr_write: host_stderr_write,

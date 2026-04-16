@@ -1,5 +1,18 @@
 pub let current_session_file_version : Int = 1
 
+pub fn default_session_dir(cwd : String) -> String {
+  resolve_cli_path(cwd, ".pi-moonbit/sessions")
+}
+
+pub fn session_file_path(session_dir : String, session_id : String) -> String {
+  let filename = session_id + ".jsonl"
+  if session_dir.has_suffix("/") {
+    session_dir + filename
+  } else {
+    session_dir + "/" + filename
+  }
+}
+
 pub fn load_session_from_file(
   runtime : CliHostRuntime,
   session_path : String
@@ -50,6 +63,64 @@ pub fn load_session_from_file(
         Err(message) => Err(message)
       }
     }
+  }
+}
+
+pub fn load_session_info(
+  runtime : CliHostRuntime,
+  session_path : String
+) -> Result[SessionInfo, String] {
+  match load_session_from_file(runtime, session_path) {
+    Err(message) => Err(message)
+    Ok(loaded) => {
+      let header = loaded.session_manager.get_header()
+      let transcript = loaded.session_manager.build_transcript_messages()
+      Ok({
+        path: session_path,
+        session_id: header.id,
+        cwd: loaded.cwd,
+        timestamp: header.timestamp,
+        parent_session: header.parent_session,
+        leaf_id: loaded.session_manager.get_leaf_id(),
+        entry_count: loaded.session_manager.get_entries().length(),
+        preview: session_preview(transcript),
+      })
+    }
+  }
+}
+
+pub fn list_sessions(
+  runtime : CliHostRuntime,
+  session_dir : String
+) -> Result[Array[SessionInfo], String] {
+  let files = match (runtime.list_files)(session_dir) {
+    Ok(paths) => paths
+    Err(message) => return Err(message)
+  }
+  let sessions : Array[SessionInfo] = []
+  for path in files {
+    if path.has_suffix(".jsonl") {
+      match load_session_info(runtime, path) {
+        Ok(info) => sessions.push(info)
+        Err(message) => return Err(message)
+      }
+    }
+  }
+  Ok(sort_sessions_by_recency(sessions))
+}
+
+pub fn find_most_recent_session_path(
+  runtime : CliHostRuntime,
+  session_dir : String
+) -> Result[String?, String] {
+  match list_sessions(runtime, session_dir) {
+    Err(message) => Err(message)
+    Ok(sessions) =>
+      if sessions.length() == 0 {
+        Ok(None)
+      } else {
+        Ok(Some(sessions[0].path))
+      }
   }
 }
 
@@ -111,6 +182,114 @@ fn infer_next_entry_id(entries : Array[@coding_agent.SessionEntry]) -> Int {
     }
   }
   max_id + 1
+}
+
+fn sort_sessions_by_recency(sessions : Array[SessionInfo]) -> Array[SessionInfo] {
+  let mut remaining = sessions.copy()
+  let sorted : Array[SessionInfo] = []
+  while remaining.length() > 0 {
+    let latest_index = latest_session_index(remaining)
+    sorted.push(remaining[latest_index])
+
+    let next_remaining : Array[SessionInfo] = []
+    for i in 0..<remaining.length() {
+      if i != latest_index {
+        next_remaining.push(remaining[i])
+      }
+    }
+    remaining = next_remaining
+  }
+  sorted
+}
+
+fn latest_session_index(sessions : Array[SessionInfo]) -> Int {
+  let mut latest_index = 0
+  for i in 1..<sessions.length() {
+    if session_recency_key(sessions[i]) > session_recency_key(sessions[latest_index]) {
+      latest_index = i
+    }
+  }
+  latest_index
+}
+
+fn session_recency_key(info : SessionInfo) -> String {
+  if info.timestamp.length() > 0 {
+    info.timestamp
+  } else {
+    info.session_id
+  }
+}
+
+fn session_preview(messages : Array[@ai.Message]) -> String {
+  let user_preview = latest_message_preview(messages, true)
+  if user_preview.length() > 0 {
+    return user_preview
+  }
+  latest_message_preview(messages, false)
+}
+
+fn latest_message_preview(
+  messages : Array[@ai.Message],
+  user_only : Bool
+) -> String {
+  let mut i = messages.length()
+  while i > 0 {
+    i = i - 1
+    match message_preview(messages[i], user_only) {
+      Some(text) if text.length() > 0 => return truncate_preview(text)
+      _ => ()
+    }
+  }
+  ""
+}
+
+fn message_preview(message : @ai.Message, user_only : Bool) -> String? {
+  match message {
+    @ai.Message::User(user) => {
+      let text = content_preview(user.content)
+      if text.length() > 0 { Some(text) } else { None }
+    }
+    @ai.Message::Assistant(assistant) =>
+      if user_only {
+        None
+      } else {
+        let text = content_preview(assistant.content)
+        if text.length() > 0 { Some(text) } else { None }
+      }
+    @ai.Message::ToolResult(_) => None
+  }
+}
+
+fn content_preview(content : Array[@ai.ContentBlock]) -> String {
+  let parts : Array[String] = []
+  for block in content {
+    match block {
+      @ai.ContentBlock::Text(text) => {
+        let normalized = normalize_preview_text(text)
+        if normalized.length() > 0 {
+          parts.push(normalized)
+        }
+      }
+      _ => ()
+    }
+  }
+  parts.join(" ")
+}
+
+fn normalize_preview_text(text : String) -> String {
+  text
+    .replace_all(old="\n", new=" ")
+    .replace_all(old="\r", new=" ")
+    .trim()
+    .to_string()
+}
+
+fn truncate_preview(text : String) -> String {
+  if text.length() <= 72 {
+    text
+  } else {
+    text[:69].to_string() + "..."
+  }
 }
 
 fn parse_generated_entry_id(id : String) -> Int? {

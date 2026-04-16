@@ -44,6 +44,20 @@ fn TestFiles::exists(self : TestFiles, path : String) -> Bool {
   false
 }
 
+fn TestFiles::list_files(self : TestFiles, path : String) -> Result[Array[String], String] {
+  let prefix = if path.has_suffix("/") { path } else { path + "/" }
+  let files : Array[String] = []
+  for file in self.files {
+    if file.path.has_prefix(prefix) {
+      let remainder = file.path[prefix.length():].to_string()
+      if !remainder.contains("/") {
+        files.push(file.path)
+      }
+    }
+  }
+  Ok(files)
+}
+
 fn TestInputs::new(lines : Array[String]) -> TestInputs {
   { lines: lines.copy() }
 }
@@ -86,6 +100,7 @@ fn test_runtime(
     read_text: fn(path) { files.val.read_text(path) },
     write_text: fn(path, content) { files.val.write_text(path, content) },
     file_exists: fn(path) { files.val.exists(path) },
+    list_files: fn(path) { files.val.list_files(path) },
     run_command: fn(_command, _cwd) {
       Ok({
         stdout: "",
@@ -141,6 +156,34 @@ fn latest_user_text(messages : Array[@ai.Message]) -> String? {
   None
 }
 
+fn seed_session_file(
+  runtime : CliHostRuntime,
+  path : String,
+  cwd : String,
+  session_id : String,
+  timestamp : String,
+  prompt : String
+) -> Unit {
+  let session_manager = @coding_agent.SessionManager::new(session_id=session_id, timestamp=timestamp)
+  ignore(session_manager.append_message(@ai.Message::User({
+    content: [@ai.ContentBlock::Text(prompt)],
+  })))
+  ignore(session_manager.append_message(@ai.Message::Assistant({
+    content: [@ai.ContentBlock::Text("echo:" + prompt)],
+    api: @ai.ApiId("mock"),
+    provider: @ai.ProviderId("mock"),
+    model: "mock-cli",
+    usage: @ai.Usage::zero(),
+    stop_reason: @ai.StopReason::Stop,
+    error_message: None,
+    timestamp: 0.0,
+  })))
+  match save_session_to_file(runtime, session_manager, path, cwd) {
+    Ok(_) => ()
+    Err(message) => abort(message)
+  }
+}
+
 test "parse_cli_args handles print mode and session path" {
   let result = parse_cli_args(
     ["pi-moonbit", "--print", "--session", "state.jsonl", "--thinking", "high", "hello"],
@@ -151,6 +194,22 @@ test "parse_cli_args handles print mode and session path" {
       assert_true(config.mode == CliMode::Print)
       assert_eq(config.session_path, Some("/workspace/state.jsonl"))
       assert_true(config.thinking_level == @agent.AgentThinkingLevel::High)
+      assert_eq(config.messages, ["hello"])
+    }
+    _ => fail("expected runnable config")
+  }
+}
+
+test "parse_cli_args resolves continue and session dir from final cwd" {
+  let result = parse_cli_args(
+    ["pi-moonbit", "--session-dir", "state", "--cwd", "/workspace/app", "--continue", "hello"],
+    cwd="/workspace",
+  )
+  match result {
+    Ok(CliParseResult::Run(config)) => {
+      assert_true(config.continue_session)
+      assert_true(!config.resume_session)
+      assert_eq(config.session_dir, Some("/workspace/app/state"))
       assert_eq(config.messages, ["hello"])
     }
     _ => fail("expected runnable config")
@@ -206,7 +265,10 @@ test "run_cli print mode persists session and prints assistant output" {
     mode: CliMode::Print,
     system_prompt: default_system_prompt(),
     session_path: Some("/tmp/project/.pi-moonbit/session.jsonl"),
+    session_dir: None,
     persist_session: true,
+    continue_session: false,
+    resume_session: false,
     cwd: "/tmp/project",
     model: test_model(),
     thinking_level: @agent.AgentThinkingLevel::Off,
@@ -240,7 +302,10 @@ test "run_cli interactive mode handles prompt then quit" {
     mode: CliMode::Interactive,
     system_prompt: default_system_prompt(),
     session_path: None,
+    session_dir: None,
     persist_session: false,
+    continue_session: false,
+    resume_session: false,
     cwd: "/tmp/project",
     model: test_model(),
     thinking_level: @agent.AgentThinkingLevel::Off,
@@ -252,4 +317,113 @@ test "run_cli interactive mode handles prompt then quit" {
   assert_true(stdout.val.join("").contains("Interactive mode."))
   assert_true(stdout.val.join("").contains("assistant> echo:hello"))
   assert_eq(stderr.val.length(), 0)
+}
+
+test "run_cli continue mode resumes most recent session file" {
+  let files = Ref::new(TestFiles::new())
+  let stdout : Ref[Array[String]] = Ref::new([])
+  let stderr : Ref[Array[String]] = Ref::new([])
+  let inputs = Ref::new(TestInputs::new([]))
+  let runtime = test_runtime(files, inputs, stdout, stderr)
+
+  seed_session_file(
+    runtime,
+    "/tmp/project/.pi-moonbit/sessions/session-old.jsonl",
+    "/tmp/project",
+    "session-old",
+    "2026-04-14T00:00:00.000Z",
+    "old",
+  )
+  seed_session_file(
+    runtime,
+    "/tmp/project/.pi-moonbit/sessions/session-new.jsonl",
+    "/tmp/project",
+    "session-new",
+    "2026-04-15T00:00:00.000Z",
+    "new",
+  )
+
+  let config : CliConfig = {
+    mode: CliMode::Print,
+    system_prompt: default_system_prompt(),
+    session_path: None,
+    session_dir: Some("/tmp/project/.pi-moonbit/sessions"),
+    persist_session: true,
+    continue_session: true,
+    resume_session: false,
+    cwd: "/tmp/project",
+    model: test_model(),
+    thinking_level: @agent.AgentThinkingLevel::Off,
+    messages: ["follow up"],
+  }
+
+  let exit_code = run_cli(config, runtime)
+  assert_eq(exit_code, 0)
+  assert_true(stdout.val.join("").contains("echo:follow up"))
+
+  let resumed = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-new.jsonl")
+  match resumed {
+    Ok(payload) => {
+      let transcript = payload.session_manager.build_transcript_messages()
+      assert_eq(transcript.length(), 4)
+    }
+    Err(message) => fail(message)
+  }
+
+  let untouched = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-old.jsonl")
+  match untouched {
+    Ok(payload) => assert_eq(payload.session_manager.build_transcript_messages().length(), 2)
+    Err(message) => fail(message)
+  }
+}
+
+test "run_cli resume mode lets user choose a session before interactive loop" {
+  let files = Ref::new(TestFiles::new())
+  let stdout : Ref[Array[String]] = Ref::new([])
+  let stderr : Ref[Array[String]] = Ref::new([])
+  let inputs = Ref::new(TestInputs::new(["2", "hello", ":quit"]))
+  let runtime = test_runtime(files, inputs, stdout, stderr)
+
+  seed_session_file(
+    runtime,
+    "/tmp/project/.pi-moonbit/sessions/session-alpha.jsonl",
+    "/tmp/project",
+    "session-alpha",
+    "2026-04-15T00:00:00.000Z",
+    "alpha",
+  )
+  seed_session_file(
+    runtime,
+    "/tmp/project/.pi-moonbit/sessions/session-beta.jsonl",
+    "/tmp/project",
+    "session-beta",
+    "2026-04-14T00:00:00.000Z",
+    "beta",
+  )
+
+  let config : CliConfig = {
+    mode: CliMode::Interactive,
+    system_prompt: default_system_prompt(),
+    session_path: None,
+    session_dir: Some("/tmp/project/.pi-moonbit/sessions"),
+    persist_session: true,
+    continue_session: false,
+    resume_session: true,
+    cwd: "/tmp/project",
+    model: test_model(),
+    thinking_level: @agent.AgentThinkingLevel::Off,
+    messages: [],
+  }
+
+  let exit_code = run_cli(config, runtime)
+  assert_eq(exit_code, 0)
+  let combined_stdout = stdout.val.join("")
+  assert_true(combined_stdout.contains("Saved sessions:"))
+  assert_true(combined_stdout.contains("assistant> echo:hello"))
+
+  let selected = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-beta.jsonl")
+  match selected {
+    Ok(payload) => assert_eq(payload.session_manager.build_transcript_messages().length(), 4)
+    Err(message) => fail(message)
+  }
 }

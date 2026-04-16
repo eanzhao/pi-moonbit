@@ -4,58 +4,58 @@ priv enum ReplCommandResult {
   Prompt(String)
 }
 
-pub fn default_session_path(cwd : String) -> String {
-  resolve_cli_path(cwd, ".pi-moonbit/session.jsonl")
+priv enum CliAppStartResult {
+  Exit(Int)
+  Ready(CliApp)
 }
 
-pub fn create_cli_app(
+priv enum ResolvedCliSessionResult {
+  Exit(Int)
+  Ready(ResolvedCliSession)
+}
+
+priv struct ResolvedCliSession {
+  session_manager : @coding_agent.SessionManager
+  session_path : String?
+  cwd : String
+}
+
+fn create_cli_app(
   config : CliConfig,
   runtime : CliHostRuntime
-) -> Result[CliApp, String] {
-  let effective_session_path = if config.persist_session {
-    match config.session_path {
-      Some(path) => Some(path)
-      None => Some(default_session_path(config.cwd))
-    }
-  } else {
-    None
+) -> Result[CliAppStartResult, String] {
+  let resolved = match resolve_cli_session(config, runtime) {
+    Ok(result) => result
+    Err(message) => return Err(message)
   }
-
-  let session_manager = match effective_session_path {
-    Some(path) =>
-      if (runtime.file_exists)(path) {
-        match load_session_from_file(runtime, path) {
-          Ok(loaded) => loaded.session_manager
-          Err(message) => return Err(message)
+  match resolved {
+    Exit(code) => Ok(Exit(code))
+    Ready(startup) => {
+      let tools = create_default_tools(runtime, startup.cwd)
+      let extensions =
+        @coding_agent.ExtensionRuntime::new(extensions=[cli_bash_history_extension()])
+      match @coding_agent.AgentSession::new(
+        config.model,
+        system_prompt=config.system_prompt,
+        thinking_level=config.thinking_level,
+        session_manager=startup.session_manager,
+        tools=tools,
+        extensions=extensions,
+      ) {
+        Err(message) => Err(message)
+        Ok(session) => {
+          match runtime.agent_stream {
+            Some(stream_fn) => session.agent.set_stream_fn(stream_fn)
+            None => ()
+          }
+          Ok(Ready({
+            session,
+            runtime,
+            session_path: startup.session_path,
+            cwd: startup.cwd,
+          }))
         }
-      } else {
-        new_session_manager(config, runtime)
       }
-    None => new_session_manager(config, runtime)
-  }
-
-  let tools = create_default_tools(runtime, config.cwd)
-  let extensions = @coding_agent.ExtensionRuntime::new(extensions=[cli_bash_history_extension()])
-  match @coding_agent.AgentSession::new(
-    config.model,
-    system_prompt=config.system_prompt,
-    thinking_level=config.thinking_level,
-    session_manager=session_manager,
-    tools=tools,
-    extensions=extensions,
-  ) {
-    Err(message) => Err(message)
-    Ok(session) => {
-      match runtime.agent_stream {
-        Some(stream_fn) => session.agent.set_stream_fn(stream_fn)
-        None => ()
-      }
-      Ok({
-        session,
-        runtime,
-        session_path: effective_session_path,
-        cwd: config.cwd,
-      })
     }
   }
 }
@@ -66,7 +66,8 @@ pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
       (runtime.stderr_write)(message + "\n")
       1
     }
-    Ok(app) =>
+    Ok(Exit(code)) => code
+    Ok(Ready(app)) =>
       match config.mode {
         CliMode::Print => run_print_mode(app, config.messages)
         CliMode::Interactive => run_interactive_mode(app, config.messages)
@@ -227,6 +228,134 @@ fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
   Continue
 }
 
+fn resolve_cli_session(
+  config : CliConfig,
+  runtime : CliHostRuntime
+) -> Result[ResolvedCliSessionResult, String] {
+  if !config.persist_session {
+    return Ok(Ready(new_persisted_session(runtime, config.cwd, None)))
+  }
+
+  let session_dir = match config.session_dir {
+    Some(path) => path
+    None => default_session_dir(config.cwd)
+  }
+
+  match config.session_path {
+    Some(path) => open_or_create_session(runtime, config.cwd, path)
+    None =>
+      if config.resume_session {
+        match select_session_to_resume(runtime, session_dir) {
+          Ok(Some(path)) => open_or_create_session(runtime, config.cwd, path)
+          Ok(None) => Ok(Exit(0))
+          Err(message) => Err(message)
+        }
+      } else if config.continue_session {
+        match find_most_recent_session_path(runtime, session_dir) {
+          Ok(Some(path)) => open_or_create_session(runtime, config.cwd, path)
+          Ok(None) => Ok(Ready(new_persisted_session(runtime, config.cwd, Some(session_dir))))
+          Err(message) => Err(message)
+        }
+      } else {
+        Ok(Ready(new_persisted_session(runtime, config.cwd, Some(session_dir))))
+      }
+  }
+}
+
+fn open_or_create_session(
+  runtime : CliHostRuntime,
+  fallback_cwd : String,
+  session_path : String
+) -> Result[ResolvedCliSessionResult, String] {
+  if !(runtime.file_exists)(session_path) {
+    return Ok(Ready(new_persisted_session(runtime, fallback_cwd, Some(session_path))))
+  }
+
+  match load_session_from_file(runtime, session_path) {
+    Err(message) => Err(message)
+    Ok(loaded) =>
+      Ok(Ready({
+        session_manager: loaded.session_manager,
+        session_path: Some(session_path),
+        cwd: if loaded.cwd.length() > 0 { loaded.cwd } else { fallback_cwd },
+      }))
+  }
+}
+
+fn new_persisted_session(
+  runtime : CliHostRuntime,
+  cwd : String,
+  path_or_dir : String?
+) -> ResolvedCliSession {
+  let session_manager = new_session_manager(runtime)
+  let session_path = match path_or_dir {
+    Some(path) if path.has_suffix(".jsonl") => Some(path)
+    Some(dir) => Some(session_file_path(dir, session_manager.get_header().id))
+    None => None
+  }
+  { session_manager, session_path, cwd }
+}
+
+fn select_session_to_resume(
+  runtime : CliHostRuntime,
+  session_dir : String
+) -> Result[String?, String] {
+  let sessions = match list_sessions(runtime, session_dir) {
+    Ok(items) => items
+    Err(message) => return Err(message)
+  }
+  if sessions.length() == 0 {
+    (runtime.stdout_write)("No saved sessions found in " + session_dir + "\n")
+    return Ok(None)
+  }
+
+  (runtime.stdout_write)("Saved sessions:\n")
+  for i in 0..<sessions.length() {
+    (runtime.stdout_write)(render_session_choice(i + 1, sessions[i]) + "\n")
+  }
+  (runtime.stdout_write)("Enter a number to resume, or press Enter to cancel.\n")
+
+  while true {
+    match (runtime.read_line)("resume> ") {
+      None => return Ok(None)
+      Some(line) => {
+        let choice = line.trim().to_string()
+        if choice == "" || choice == "q" || choice == "quit" {
+          return Ok(None)
+        }
+        match parse_positive_int(choice) {
+          Some(index) if index >= 1 && index <= sessions.length() => {
+            return Ok(Some(sessions[index - 1].path))
+          }
+          _ => {
+            (runtime.stderr_write)(
+              "invalid selection: " + choice + " (expected 1-" +
+              sessions.length().to_string() + ")\n",
+            )
+          }
+        }
+      }
+    }
+  }
+
+  Ok(None)
+}
+
+fn render_session_choice(index : Int, info : SessionInfo) -> String {
+  let parts : Array[String] = [
+    index.to_string() + ". " + info.session_id,
+  ]
+  if info.timestamp.length() > 0 {
+    parts.push(info.timestamp)
+  }
+  parts.push(info.cwd)
+  let mut rendered = parts.join("  ")
+  if info.preview.length() > 0 {
+    rendered = rendered + "\n   " + info.preview
+  }
+  rendered
+}
+
 fn create_default_tools(
   runtime : CliHostRuntime,
   cwd : String
@@ -282,7 +411,7 @@ fn cli_bash_history_extension() -> @coding_agent.CodingExtension {
   }
 }
 
-fn new_session_manager(_config : CliConfig, runtime : CliHostRuntime) -> @coding_agent.SessionManager {
+fn new_session_manager(runtime : CliHostRuntime) -> @coding_agent.SessionManager {
   let timestamp = (runtime.now_iso)()
   @coding_agent.SessionManager::new(
     session_id=session_id_from_timestamp(timestamp),
@@ -293,6 +422,14 @@ fn new_session_manager(_config : CliConfig, runtime : CliHostRuntime) -> @coding
 fn session_id_from_timestamp(timestamp : String) -> String {
   "session-" +
   timestamp.replace(old=":", new="-").replace(old=".", new="-")
+}
+
+fn parse_positive_int(text : String) -> Int? {
+  let parsed : Result[Int, Error] = try? @string.parse_int(text)
+  match parsed {
+    Ok(value) if value > 0 => Some(value)
+    _ => None
+  }
 }
 
 fn resolve_workspace_path(cwd : String, path : String) -> String {
