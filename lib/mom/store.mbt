@@ -17,6 +17,32 @@ pub fn workspace_event_file_path(
   mom_join_path(workspace_events_dir(workspace_dir), filename)
 }
 
+pub fn event_filename_in_dir(
+  events_dir : String,
+  path : String
+) -> String? {
+  if !path.contains("/") {
+    return if path.length() > 0 { Some(path) } else { None }
+  }
+  let prefix = if events_dir.has_suffix("/") { events_dir } else { events_dir + "/" }
+  if !path.has_prefix(prefix) {
+    return None
+  }
+  let filename = path[prefix.length():].to_string()
+  if filename.length() > 0 {
+    Some(filename)
+  } else {
+    None
+  }
+}
+
+pub fn workspace_event_filename(
+  workspace_dir : String,
+  path : String
+) -> String? {
+  event_filename_in_dir(workspace_events_dir(workspace_dir), path)
+}
+
 pub fn workspace_channels_dir(workspace_dir : String) -> String {
   mom_join_path(workspace_dir, "channels")
 }

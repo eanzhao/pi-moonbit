@@ -192,6 +192,43 @@ test "host driver exposes event workspace mutation helpers" {
   assert_eq(driver.list_event_files().length(), 0)
 }
 
+test "host driver file_changed_path normalizes watched paths" {
+  let driver = MomHostDriver::new_in_memory(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    MomHostCallbacks::new(
+      fn(_watched_dir) { Ok(()) },
+      fn(_due_at_ms) { Ok(()) },
+      fn(_entry) { Ok(()) },
+      fn(_filename) { Ok(()) },
+    ),
+  )
+
+  let queued = driver.file_changed_path(
+    driver.events_dir() + "/nested/future.json",
+    1_000UL,
+  ).unwrap()
+  match queued {
+    Some(step) =>
+      match step.result {
+        FileQueued(pending) => {
+          assert_eq(pending.length(), 1)
+          assert_eq(pending[0].filename, "nested/future.json")
+        }
+        _ => fail("expected queued file change")
+      }
+    None => fail("expected queued step")
+  }
+  assert_eq(driver.list_pending_file_changes()[0].filename, "nested/future.json")
+  match driver.file_changed_path("/tmp/other.json", 2_000UL).unwrap() {
+    Some(_) => fail("expected unrelated path to be ignored")
+    None => ()
+  }
+}
+
 test "run mom host input with handle runtime bridges directly" {
   let host = MomInMemoryHost::new(
     host_test_config(),

@@ -53,6 +53,28 @@ pub fn MomHostRuntime::file_changed(
   self.step(FileChanged(filename, now_ms))
 }
 
+pub fn MomHostRuntime::event_filename(
+  self : MomHostRuntime,
+  path : String
+) -> String? {
+  event_filename_in_dir(self.events_dir(), path)
+}
+
+pub fn MomHostRuntime::file_changed_path(
+  self : MomHostRuntime,
+  path : String,
+  now_ms : UInt64
+) -> Result[MomHostStep?, MomHostStepError] {
+  match self.event_filename(path) {
+    Some(filename) =>
+      match self.file_changed(filename, now_ms) {
+        Ok(step) => Ok(Some(step))
+        Err(error) => Err(error)
+      }
+    None => Ok(None)
+  }
+}
+
 pub fn MomHostRuntime::wakeup(
   self : MomHostRuntime,
   now : String

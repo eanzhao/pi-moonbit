@@ -28,6 +28,13 @@ test "workspace paths namespace channels by adapter" {
   let base = "/workspace"
   assert_eq(workspace_global_memory_path(base), "/workspace/MEMORY.md")
   assert_eq(workspace_events_dir(base), "/workspace/events")
+  assert_eq(event_filename_in_dir("/workspace/events", "daily.json"), Some("daily.json"))
+  assert_eq(
+    event_filename_in_dir("/workspace/events", "/workspace/events/nested/daily.json"),
+    Some("nested/daily.json"),
+  )
+  assert_eq(workspace_event_filename(base, "/workspace/events/daily.json"), Some("daily.json"))
+  assert_eq(workspace_event_filename(base, "/tmp/daily.json"), None)
   assert_eq(workspace_channel_dir(base, "slack-acme", "C123"), "/workspace/channels/slack-acme/C123")
   assert_eq(workspace_channel_log_path(base, "slack-acme", "C123"), "/workspace/channels/slack-acme/C123/log.jsonl")
   assert_eq(qualified_channel_id("slack-acme", "C123"), "slack-acme/C123")

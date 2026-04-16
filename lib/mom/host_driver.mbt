@@ -89,6 +89,21 @@ pub fn MomHostDriver::file_changed(
   self.step(FileChanged(filename, now_ms))
 }
 
+pub fn MomHostDriver::file_changed_path(
+  self : MomHostDriver,
+  path : String,
+  now_ms : UInt64
+) -> Result[MomHostStep?, MomHostStepError] {
+  match event_filename_in_dir(self.events_dir(), path) {
+    Some(filename) =>
+      match self.file_changed(filename, now_ms) {
+        Ok(step) => Ok(Some(step))
+        Err(error) => Err(error)
+      }
+    None => Ok(None)
+  }
+}
+
 pub fn MomHostDriver::wakeup(
   self : MomHostDriver,
   now : String

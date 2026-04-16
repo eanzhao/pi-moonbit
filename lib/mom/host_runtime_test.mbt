@@ -72,3 +72,43 @@ test "host runtime in memory with handle runtime constructs directly" {
   assert_eq(handle_runtime.snapshot().registered_periodics[0].filename, "daily.json")
   assert_eq(runtime.list_event_files().length(), 1)
 }
+
+test "host runtime file_changed_path filters to events dir" {
+  let runtime = mom_host_runtime_in_memory(
+    host_test_config(),
+    "slack-acme",
+    runner_test_channels(),
+    runner_test_users(),
+    "2026-04-16T12:00:00Z",
+    MomHostCallbacks::new(
+      fn(_watched_dir) { Ok(()) },
+      fn(_due_at_ms) { Ok(()) },
+      fn(_entry) { Ok(()) },
+      fn(_filename) { Ok(()) },
+    ),
+  )
+
+  assert_eq(
+    runtime.event_filename(runtime.events_dir() + "/nested/daily.json"),
+    Some("nested/daily.json"),
+  )
+  let queued = runtime.file_changed_path(
+    runtime.events_dir() + "/nested/daily.json",
+    1_000UL,
+  ).unwrap()
+  match queued {
+    Some(step) =>
+      match step.result {
+        FileQueued(pending) => {
+          assert_eq(pending.length(), 1)
+          assert_eq(pending[0].filename, "nested/daily.json")
+        }
+        _ => fail("expected queued file change")
+      }
+    None => fail("expected queued step")
+  }
+  match runtime.file_changed_path("/tmp/other.json", 2_000UL).unwrap() {
+    Some(_) => fail("expected unrelated path to be ignored")
+    None => ()
+  }
+}
