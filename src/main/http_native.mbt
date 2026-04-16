@@ -16,6 +16,6 @@ fn host_openai_stream(
   raise @ai.StreamError("OpenAI streaming is not implemented for native target yet")
 }
 
-fn host_env_var(_name : String) -> String? {
-  None
+fn host_env_var(name : String) -> String? {
+  @env.get_env_var(name)
 }
