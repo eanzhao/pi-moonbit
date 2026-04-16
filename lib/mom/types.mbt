@@ -370,6 +370,11 @@ pub(all) struct MomInMemoryHost {
   mom : MomAgent
 }
 
+pub(all) struct MomHostDriver {
+  host : Ref[MomInMemoryHost]
+  callbacks : MomHostCallbacks
+}
+
 pub(all) enum MomHostInput {
   Sync(String)
   Message(ChannelMessage)
