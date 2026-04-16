@@ -142,6 +142,19 @@ pub fn MomInMemoryHost::next_due_at_ms(self : MomInMemoryHost) -> UInt64? {
   self.runner.next_due_at_ms()
 }
 
+pub fn MomInMemoryHost::list_pending_file_changes(
+  self : MomInMemoryHost
+) -> Array[MomPendingEventFile] {
+  self.runner.list_pending_file_changes()
+}
+
+pub fn MomInMemoryHost::clear_file_change(
+  self : MomInMemoryHost,
+  filename : String
+) -> Bool {
+  self.runner.clear_file_change(filename)
+}
+
 pub fn MomInMemoryHost::write_event(
   self : MomInMemoryHost,
   filename : String,
@@ -220,6 +233,50 @@ pub fn MomInMemoryHost::dispatch_periodic(
     filename,
     now,
   )
+}
+
+pub fn MomInMemoryHost::handle_input(
+  self : MomInMemoryHost,
+  input : MomHostInput
+) -> Result[MomHostResult, MomRunnerError] {
+  match input {
+    Sync(now) =>
+      match self.sync(now) {
+        Ok(result) => Ok(Synced(result))
+        Err(error) => Err(error)
+      }
+    Message(message) =>
+      match self.handle_message(message) {
+        Ok(result) => Ok(MessageHandled(result))
+        Err(error) => Err(error)
+      }
+    FileChanged(filename, now_ms) => {
+      self.note_file_change(filename, now_ms)
+      Ok(FileQueued(self.list_pending_file_changes()))
+    }
+    Wakeup(now) =>
+      match self.tick(now) {
+        Ok(result) => Ok(Woke(result))
+        Err(error) => Err(error)
+      }
+    Periodic(filename, now) =>
+      match self.dispatch_periodic(filename, now) {
+        Ok(result) => Ok(PeriodicDispatched(result))
+        Err(error) => Err(error)
+      }
+  }
+}
+
+pub fn mom_host_result_handle_plan(
+  result : MomHostResult
+) -> MomEventHandlePlan? {
+  match result {
+    Synced(sync) => Some(sync.handle_plan)
+    MessageHandled(turn) => Some(turn.handle_plan)
+    Woke(tick) => Some(tick.handle_plan)
+    PeriodicDispatched(periodic) => Some(periodic.handle_plan)
+    FileQueued(_) => None
+  }
 }
 
 fn in_memory_event_workspace_get(

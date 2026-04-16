@@ -356,6 +356,22 @@ pub(all) struct MomInMemoryHost {
   mom : MomAgent
 }
 
+pub(all) enum MomHostInput {
+  Sync(String)
+  Message(ChannelMessage)
+  FileChanged(String, UInt64)
+  Wakeup(String)
+  Periodic(String, String)
+} derive(Eq)
+
+pub(all) enum MomHostResult {
+  Synced(MomRunnerSyncResult)
+  MessageHandled(MomRunnerTurnResult)
+  FileQueued(Array[MomPendingEventFile])
+  Woke(MomRunnerTickResult)
+  PeriodicDispatched(MomRunnerPeriodicResult)
+} derive(Eq)
+
 pub(open) trait MomEventHandleRuntime {
   set_watch_dir(Self, String?) -> Result[Unit, String]
   set_wakeup_due_at_ms(Self, UInt64?) -> Result[Unit, String]
