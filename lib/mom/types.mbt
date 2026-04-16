@@ -188,6 +188,11 @@ pub(all) struct MomEventLoop {
   periodic_registry : MomPeriodicRegistry
 }
 
+pub(all) struct MomRunner {
+  event_loop : MomEventLoop
+  mut handle_state : MomEventHandleState
+}
+
 pub(all) struct MomEventHandleState {
   watched_dir : String?
   wakeup_due_at_ms : UInt64?
@@ -215,6 +220,26 @@ pub(all) struct MomEventTickResult {
   one_shot_results : Array[MomEventDispatchResult]
 } derive(Eq)
 
+pub(all) struct MomRunnerSyncResult {
+  sync : MomEventHostSync
+  handle_plan : MomEventHandlePlan
+} derive(Eq)
+
+pub(all) struct MomRunnerTurnResult {
+  run : MomRunResult
+  handle_plan : MomEventHandlePlan
+} derive(Eq)
+
+pub(all) struct MomRunnerTickResult {
+  tick : MomEventTickResult
+  handle_plan : MomEventHandlePlan
+} derive(Eq)
+
+pub(all) struct MomRunnerPeriodicResult {
+  dispatch : MomEventDispatchResult
+  handle_plan : MomEventHandlePlan
+} derive(Eq)
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)
@@ -228,6 +253,13 @@ pub(all) enum MomEventDispatchError {
   MissingPeriodic(String)
   InvalidChannelId(String)
   AdapterMismatch(String)
+  AgentFailed(MomAgentError)
+} derive(Eq)
+
+pub(all) enum MomRunnerError {
+  EventRuntimeFailed(String)
+  HandleRuntimeFailed(String)
+  EventDispatchFailed(MomEventDispatchError)
   AgentFailed(MomAgentError)
 } derive(Eq)
 
