@@ -167,6 +167,20 @@ pub(all) struct MomEventDebounceQueue {
   mut pending : Array[MomPendingEventFile]
 }
 
+pub(all) struct MomScheduledTimer {
+  filename : String
+  event : OneShotEvent
+  due_at_ms : UInt64
+} derive(Eq)
+
+pub(all) struct MomOneShotTimerRegistry {
+  mut timers : Array[MomScheduledTimer]
+}
+
+pub(all) struct MomPeriodicRegistry {
+  mut entries : Array[MomRegisteredPeriodic]
+}
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)

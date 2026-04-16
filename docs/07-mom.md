@@ -10,10 +10,13 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - channel log 到 `SessionManager` 的 context 同步逻辑
 - sandbox 参数解析与 host/container 路径映射
 - events JSON 解析、序列化与触发消息格式化
+- `event_time.mbt`：统一的 ISO 8601 timestamp 解析，供 planner 和 timer 层复用
 - `event_plan.mbt`：按当前时间把 event 文件归类为 trigger / delete / schedule / register
 - `event_host.mbt`：扫描 `workspace/events/`，做 poll-based delta tracking，把 trigger event 翻译成真正的 channel turn，并在成功后清理应删除的 event file
 - `poll_sync(...)`：显式产出 one-shot / periodic 的 added / removed delta，供后续 timer / cron registry 直接消费
 - `event_watch.mbt`：提供 watcher 侧 debounce queue，把抖动的文件变化折叠成稳定的待处理 filename 列表
+- `event_timer.mbt`：one-shot timer registry，支持 register / remove / flush due
+- `event_periodic.mbt`：periodic registry，承接 host sync 的 add / remove delta
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -33,8 +36,12 @@ lib/mom/
 ├── context.mbt
 ├── sandbox.mbt
 ├── events.mbt
+├── event_time.mbt
 ├── event_plan.mbt
 ├── event_host.mbt
+├── event_watch.mbt
+├── event_timer.mbt
+├── event_periodic.mbt
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
@@ -44,8 +51,12 @@ lib/mom/
 ├── context_test.mbt
 ├── sandbox_test.mbt
 ├── events_test.mbt
+├── event_time_test.mbt
 ├── event_plan_test.mbt
 ├── event_host_test.mbt
+├── event_watch_test.mbt
+├── event_timer_test.mbt
+├── event_periodic_test.mbt
 ├── prompt_test.mbt
 └── agent_test.mbt
 ```
@@ -198,7 +209,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 36 个测试，覆盖这些主线：
+`lib/mom` 当前新增 42 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -247,6 +258,12 @@ pub(all) enum MomEvent {
 - 多个 pending 文件会按 due time 和 filename 稳定排序
 - `clear(...)` 可用于宿主取消已无效的待处理事件
 
+### event_time / event_timer / event_periodic tests
+
+- ISO timestamp 会被规范化到统一毫秒时间线
+- one-shot timer registry 支持增删替换、`next_due_at_ms(...)` 和 `flush_due(...)`
+- periodic registry 支持承接 host delta 并稳定维护当前注册集
+
 ### agent_test.mbt
 
 - `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
@@ -273,7 +290,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning、workspace 扫描、poll-based state tracking、timer-registry delta、trigger dispatch、cleanup 与 watcher debounce
+- events 解析、planning、workspace 扫描、poll-based state tracking、watcher debounce、shared time parsing、one-shot timer registry、periodic registry、trigger dispatch 与 cleanup
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
@@ -283,7 +300,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - 实时 socket 连接
 - 真实文件下载
 - 真正常驻的 fs watcher / debounce 循环
-- one-shot timer / periodic cron registry
+- 真实 one-shot timer handle / periodic cron handle 绑定
 - 真实 bash executor 和容器校验
 
 也就是说，这一版完成的是 mom 的“平台无关运行层”，而不是最终可联网运行的聊天机器人宿主。
