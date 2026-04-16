@@ -33,7 +33,7 @@ pi-mono 有 7 个包，各自负责一块明确的职责：
 | `coding-agent` | `@mariozechner/pi-coding-agent` | 编码助手 CLI：内置工具、会话管理、扩展系统 |
 | `tui` | `@mariozechner/pi-tui` | 终端 UI 库：差分渲染、组件系统 |
 | `web-ui` | `@mariozechner/pi-web-ui` | Web 聊天组件库 |
-| `mom` | `@mariozechner/pi-mom` | Slack 机器人：消息委派给编码助手处理 |
+| `mom` | `@mariozechner/pi-mom` | Chat bot 支撑层：消息、workspace、event 统一抽象 |
 | `pods` | `@mariozechner/pi` | GPU Pod 管理 CLI：vLLM 部署 |
 
 它们的依赖关系长这样：
@@ -58,7 +58,7 @@ pi-mono 有 7 个包，各自负责一块明确的职责：
 - **agent** 依赖 ai（Agent 需要 LLM API）
 - **web-ui** 依赖 ai 和 tui（Web 界面需要 LLM API 和 UI 组件）
 - **coding-agent** 依赖 ai、agent、tui（编码助手需要全部基础能力）
-- **mom** 依赖 ai、agent、coding-agent（Slack 机器人把消息转给编码助手处理）
+- **mom** 依赖 ai、agent、coding-agent（chat 平台消息会被整理后委派给编码助手处理）
 - **pods** 依赖 agent（GPU Pod 管理需要 Agent 引擎）
 
 ## 我们怎么重写？
@@ -91,7 +91,9 @@ pi-mono/packages/          →    pi-moonbit/lib/
 | 03 | `lib/agent` | Agent 循环、工具类型、事件系统 |
 | 04 | `lib/coding_agent` | 内置工具、会话管理、扩展 API |
 | 05 | `src/main` | CLI 入口，把所有模块串起来 |
-| 06+ | 其他 | Web UI / Pods / Slack 等 |
+| 06 | `lib/web_ui` | Web transcript、storage/store、proxy、component/html view layer |
+| 07 | `lib/mom` | channel 消息模型、log/context sync、sandbox/event/prompt 支撑层 |
+| 08+ | 其他 | Pods / Slack adapter / 其他宿主接线 |
 
 每个阶段写一篇文档（就是你正在读的这个系列），记录设计决策和实现细节。
 
@@ -230,6 +232,8 @@ pub(open) trait Extension {
 | 03 | Agent 引擎：循环、工具、事件（依赖 01） |
 | 04 | 编码智能体：工具、会话、扩展（依赖 01 + 02 + 03） |
 | 05 | CLI 入口与集成 |
-| 06+ | Web UI / Pods / Slack |
+| 06 | Web UI 支撑层 |
+| 07 | Mom 支撑层 |
+| 08+ | Pods / adapter 宿主层 |
 
 每篇文档包含：对应 pi-mono 包的架构分析、MoonBit 实现的设计决策、关键类型和接口定义、与 TypeScript 版的对照。

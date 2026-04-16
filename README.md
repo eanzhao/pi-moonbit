@@ -11,7 +11,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 
 ## 当前进度
 
-**核心路径已完成**：6 个阶段、95 个测试全部通过。
+**核心路径已完成**：7 个阶段、106 个测试全部通过。
 
 | 包 | 状态 | 说明 |
 |---|---|---|
@@ -21,7 +21,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 | `lib/coding_agent` | ✅ 已完成 | 编码助手核心：append-only 会话树、分支/compaction、扩展钩子、4 个内置工具 |
 | `src/main` | ✅ 已完成 | CLI 入口：参数解析、多 session JSONL 存储、`--continue/--resume`、Print/REPL、JS host runtime |
 | `lib/web_ui` | ✅ 已完成 | Web transcript、storage/store、proxy/format，以及纯 MoonBit 组件/HTML 视图层 |
-| `lib/mom` | 🔲 待开发 | Slack 机器人集成 |
+| `lib/mom` | ✅ 已完成 | Mom 支撑层：统一 channel 模型、log/context sync、sandbox/event/prompt 抽象 |
 | `lib/pods` | 🔲 待开发 | GPU Pod 管理 |
 
 ## 快速开始
@@ -31,7 +31,7 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 ```bash
 moon check          # 类型检查
 moon build          # 编译
-moon test           # 运行全部 95 个测试
+moon test           # 运行全部 106 个测试
 moon test lib/ai    # 运行某个包的测试
 ```
 
@@ -46,7 +46,8 @@ pi-moonbit/
 │   ├── tui/               # Phase 02 — 终端 UI 库
 │   ├── agent/             # Phase 03 — Agent 循环引擎
 │   ├── coding_agent/      # Phase 04 — 编码助手核心
-│   └── web_ui/            # Phase 06 — Web UI 支撑层
+│   ├── web_ui/            # Phase 06 — Web UI 支撑层
+│   └── mom/               # Phase 07 — Mom 支撑层
 ├── src/main/              # Phase 05 — CLI 入口
 └── pi-mono/               # 原始 TS 实现（只读参考，gitignored）
 ```
@@ -62,6 +63,7 @@ pi-moonbit/
 - [04 - Coding Agent](docs/04-coding-agent.md) — 会话管理、扩展系统、内置工具
 - [05 - CLI 入口](docs/05-cli.md) — 参数解析、多 session JSONL、continue/resume、REPL
 - [06 - Web UI 支撑层](docs/06-web-ui.md) — Web transcript、storage/store、proxy/format、component/html view layer
+- [07 - Mom 支撑层](docs/07-mom.md) — 统一 channel 模型、log/context sync、sandbox/event/prompt 抽象
 
 ## 参考
 
