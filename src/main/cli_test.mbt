@@ -314,8 +314,9 @@ test "run_cli interactive mode handles prompt then quit" {
 
   let exit_code = run_cli(config, runtime)
   assert_eq(exit_code, 0)
-  assert_true(stdout.val.join("").contains("Interactive mode."))
-  assert_true(stdout.val.join("").contains("assistant> echo:hello"))
+  let combined = stdout.val.join("")
+  assert_true(combined.contains("pi-moonbit"))
+  assert_true(combined.contains("echo:hello"))
   assert_eq(stderr.val.length(), 0)
 }
 
@@ -419,7 +420,7 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
   assert_eq(exit_code, 0)
   let combined_stdout = stdout.val.join("")
   assert_true(combined_stdout.contains("Saved sessions:"))
-  assert_true(combined_stdout.contains("assistant> echo:hello"))
+  assert_true(combined_stdout.contains("echo:hello"))
 
   let selected = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-beta.jsonl")
   match selected {

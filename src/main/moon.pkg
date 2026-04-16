@@ -2,6 +2,7 @@ import {
   "eanzhao/pi-moonbit/lib/ai" @ai,
   "eanzhao/pi-moonbit/lib/agent" @agent,
   "eanzhao/pi-moonbit/lib/coding_agent" @coding_agent,
+  "eanzhao/pi-moonbit/lib/tui" @tui,
   "moonbitlang/core/env" @env,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/string" @string,

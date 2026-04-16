@@ -78,7 +78,7 @@ pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
     Ok(Ready(app)) =>
       match config.mode {
         CliMode::Print => run_print_mode(app, config.messages)
-        CliMode::Interactive => run_interactive_mode(app, config.messages)
+        CliMode::Interactive => run_tui_interactive_mode(app, config.messages)
       }
   }
 }
