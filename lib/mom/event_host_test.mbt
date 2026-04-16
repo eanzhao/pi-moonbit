@@ -387,6 +387,57 @@ test "event host poll promotes scheduled one-shot to trigger when due" {
   assert_eq(third.length(), 0)
 }
 
+test "event host poll_sync reports added and removed timer registry entries" {
+  let event_workspace = test_event_workspace([
+    (
+      "/workspace/events/daily.json",
+      "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"check\",\"schedule\":\"0 9 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      None,
+    ),
+    (
+      "/workspace/events/reminder.json",
+      "{\"type\":\"one-shot\",\"channelId\":\"slack-acme/C123\",\"text\":\"remind\",\"at\":\"2026-04-17T10:00:00+08:00\"}",
+      None,
+    ),
+  ])
+  let runtime = test_event_workspace_runtime(event_workspace)
+  let host = MomEventHost::new("/workspace", "2026-04-16T12:00:00Z")
+
+  let first = host.poll_sync(runtime, "2026-04-17T09:00:00+08:00").unwrap()
+  assert_eq(first.changed_plans.length(), 2)
+  assert_eq(first.added_one_shots.length(), 1)
+  assert_eq(first.removed_one_shots.length(), 0)
+  assert_eq(first.added_periodics.length(), 1)
+  assert_eq(first.removed_periodics.length(), 0)
+  assert_eq(first.added_one_shots[0].filename, "reminder.json")
+  assert_eq(first.added_periodics[0].event.schedule, "0 9 * * 1-5")
+
+  event_workspace.val.files = [
+    (
+      "/workspace/events/daily.json",
+      "{\"type\":\"periodic\",\"channelId\":\"slack-acme/C123\",\"text\":\"check\",\"schedule\":\"0 10 * * 1-5\",\"timezone\":\"Asia/Singapore\"}",
+      None,
+    ),
+  ]
+
+  let second = host.poll_sync(runtime, "2026-04-17T09:00:00+08:00").unwrap()
+  assert_eq(second.changed_plans.length(), 1)
+  assert_eq(second.added_one_shots.length(), 0)
+  assert_eq(second.removed_one_shots.length(), 1)
+  assert_eq(second.removed_one_shots[0].filename, "reminder.json")
+  assert_eq(second.added_periodics.length(), 1)
+  assert_eq(second.removed_periodics.length(), 1)
+  assert_eq(second.added_periodics[0].event.schedule, "0 10 * * 1-5")
+  assert_eq(second.removed_periodics[0].event.schedule, "0 9 * * 1-5")
+
+  let third = host.poll_sync(runtime, "2026-04-17T09:00:00+08:00").unwrap()
+  assert_eq(third.changed_plans.length(), 0)
+  assert_eq(third.added_one_shots.length(), 0)
+  assert_eq(third.removed_one_shots.length(), 0)
+  assert_eq(third.added_periodics.length(), 0)
+  assert_eq(third.removed_periodics.length(), 0)
+}
+
 test "event host poll_and_dispatch suppresses duplicate trigger execution" {
   let event_workspace = test_event_workspace([
     (

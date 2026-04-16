@@ -149,6 +149,14 @@ pub(all) struct MomEventHost {
   mut registered_periodics : Array[MomRegisteredPeriodic]
 }
 
+pub(all) struct MomEventHostSync {
+  changed_plans : Array[MomEventPlan]
+  added_one_shots : Array[MomScheduledOneShot]
+  removed_one_shots : Array[MomScheduledOneShot]
+  added_periodics : Array[MomRegisteredPeriodic]
+  removed_periodics : Array[MomRegisteredPeriodic]
+} derive(Eq)
+
 pub(all) enum MomEventDispatchResult {
   Triggered(MomRunResult)
   ScheduledOneShot(MomScheduledOneShot)

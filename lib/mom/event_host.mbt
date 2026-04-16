@@ -37,6 +37,18 @@ pub fn MomEventHost::poll(
   runtime : MomEventWorkspaceRuntime,
   now : String
 ) -> Result[Array[MomEventPlan], String] {
+  let sync = match self.poll_sync(runtime, now) {
+    Ok(value) => value
+    Err(message) => return Err(message)
+  }
+  Ok(sync.changed_plans)
+}
+
+pub fn MomEventHost::poll_sync(
+  self : MomEventHost,
+  runtime : MomEventWorkspaceRuntime,
+  now : String
+) -> Result[MomEventHostSync, String] {
   let plans = match plan_workspace_mom_events(
     runtime,
     self.workspace_dir,
@@ -46,7 +58,7 @@ pub fn MomEventHost::poll(
     Ok(value) => value
     Err(message) => return Err(message)
   }
-  Ok(self.update_plans(plans))
+  Ok(self.sync_plans(plans))
 }
 
 pub fn[T : PlatformAdapter] MomEventHost::poll_and_dispatch(
@@ -56,12 +68,12 @@ pub fn[T : PlatformAdapter] MomEventHost::poll_and_dispatch(
   mom : MomAgent,
   now : String
 ) -> Result[Array[MomEventDispatchResult], MomEventDispatchError] {
-  let plans = match self.poll(runtime, now) {
+  let sync = match self.poll_sync(runtime, now) {
     Ok(value) => value
     Err(message) => return Err(RuntimeFailed(message))
   }
   let results : Array[MomEventDispatchResult] = []
-  for plan in plans {
+  for plan in sync.changed_plans {
     match dispatch_mom_event_plan_with_adapter(adapter, mom, plan, now) {
       Ok(result) => results.push(result)
       Err(error) => return Err(error)
@@ -77,13 +89,13 @@ pub fn[T : PlatformAdapter] MomEventHost::poll_dispatch_and_cleanup(
   mom : MomAgent,
   now : String
 ) -> Result[Array[MomEventDispatchResult], MomEventDispatchError] {
-  let plans = match self.poll(runtime, now) {
+  let sync = match self.poll_sync(runtime, now) {
     Ok(value) => value
     Err(message) => return Err(RuntimeFailed(message))
   }
   let results : Array[MomEventDispatchResult] = []
   let cleanup_filenames : Array[String] = []
-  for plan in plans {
+  for plan in sync.changed_plans {
     match dispatch_mom_event_plan_with_adapter(adapter, mom, plan, now) {
       Ok(result) => {
         results.push(result)
@@ -212,10 +224,10 @@ pub fn[T : PlatformAdapter] dispatch_mom_event_plan_with_adapter(
   }
 }
 
-fn MomEventHost::update_plans(
+fn MomEventHost::sync_plans(
   self : MomEventHost,
   plans : Array[MomEventPlan]
-) -> Array[MomEventPlan] {
+) -> MomEventHostSync {
   let changed : Array[MomEventPlan] = []
   let next_observed : Array[(String, MomEventPlan)] = []
   let next_scheduled : Array[MomScheduledOneShot] = []
@@ -236,10 +248,21 @@ fn MomEventHost::update_plans(
     }
   }
 
+  let added_one_shots = diff_added_one_shots(self.scheduled_one_shots, next_scheduled)
+  let removed_one_shots = diff_removed_one_shots(self.scheduled_one_shots, next_scheduled)
+  let added_periodics = diff_added_periodics(self.registered_periodics, next_periodic)
+  let removed_periodics = diff_removed_periodics(self.registered_periodics, next_periodic)
+
   self.observed_plans = next_observed
   self.scheduled_one_shots = next_scheduled
   self.registered_periodics = next_periodic
-  changed
+  {
+    changed_plans: changed,
+    added_one_shots,
+    removed_one_shots,
+    added_periodics,
+    removed_periodics,
+  }
 }
 
 fn mom_event_filename(events_dir : String, listed_path : String) -> String {
@@ -345,4 +368,80 @@ fn mom_event_plan_cleanup_filename(plan : MomEventPlan) -> String? {
     Invalid(filename, _message) => Some(filename)
     _ => None
   }
+}
+
+fn diff_added_one_shots(
+  previous : Array[MomScheduledOneShot],
+  current : Array[MomScheduledOneShot]
+) -> Array[MomScheduledOneShot] {
+  let added : Array[MomScheduledOneShot] = []
+  for item in current {
+    if !scheduled_one_shot_contains(previous, item) {
+      added.push(item)
+    }
+  }
+  added
+}
+
+fn diff_removed_one_shots(
+  previous : Array[MomScheduledOneShot],
+  current : Array[MomScheduledOneShot]
+) -> Array[MomScheduledOneShot] {
+  let removed : Array[MomScheduledOneShot] = []
+  for item in previous {
+    if !scheduled_one_shot_contains(current, item) {
+      removed.push(item)
+    }
+  }
+  removed
+}
+
+fn diff_added_periodics(
+  previous : Array[MomRegisteredPeriodic],
+  current : Array[MomRegisteredPeriodic]
+) -> Array[MomRegisteredPeriodic] {
+  let added : Array[MomRegisteredPeriodic] = []
+  for item in current {
+    if !registered_periodic_contains(previous, item) {
+      added.push(item)
+    }
+  }
+  added
+}
+
+fn diff_removed_periodics(
+  previous : Array[MomRegisteredPeriodic],
+  current : Array[MomRegisteredPeriodic]
+) -> Array[MomRegisteredPeriodic] {
+  let removed : Array[MomRegisteredPeriodic] = []
+  for item in previous {
+    if !registered_periodic_contains(current, item) {
+      removed.push(item)
+    }
+  }
+  removed
+}
+
+fn scheduled_one_shot_contains(
+  items : Array[MomScheduledOneShot],
+  target : MomScheduledOneShot
+) -> Bool {
+  for item in items {
+    if item == target {
+      return true
+    }
+  }
+  false
+}
+
+fn registered_periodic_contains(
+  items : Array[MomRegisteredPeriodic],
+  target : MomRegisteredPeriodic
+) -> Bool {
+  for item in items {
+    if item == target {
+      return true
+    }
+  }
+  false
 }
