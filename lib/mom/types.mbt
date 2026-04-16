@@ -49,6 +49,19 @@ pub(all) struct ChannelContext {
   users : Array[UserInfo]
 } derive(Eq)
 
+pub(all) struct AdapterOutboundMessage {
+  channel_id : String
+  text : String
+  reply_to : String?
+} derive(Eq)
+
+pub(all) struct AdapterSentMessage {
+  id : String
+  channel_id : String
+  text : String
+  reply_to : String?
+} derive(Eq)
+
 pub(all) struct MomSkill {
   name : String
   description : String
@@ -137,6 +150,7 @@ pub(all) enum MomAgentError {
   SessionInitFailed(String)
   WorkspaceReadFailed(String)
   WorkspaceWriteFailed(String)
+  AdapterFailed(String)
   AgentError(@agent.AgentError)
 } derive(Eq)
 
@@ -151,4 +165,23 @@ pub(all) struct MomAgent {
   config : MomAgentConfig
   mut channel_store : InMemoryChannelStore
   mut sessions : Array[Ref[MomChannelSession]]
+}
+
+pub(all) struct InMemoryPlatformAdapter {
+  adapter_name : String
+  channels : Array[ChannelInfo]
+  users : Array[UserInfo]
+  mut started : Bool
+  mut sent_messages : Array[AdapterSentMessage]
+  mut observed_events : Array[String]
+}
+
+pub(open) trait PlatformAdapter {
+  name(Self) -> String
+  start(Self) -> Unit = _
+  stop(Self) -> Unit = _
+  get_channels(Self) -> Array[ChannelInfo]
+  get_users(Self) -> Array[UserInfo]
+  send_message(Self, AdapterOutboundMessage) -> Result[AdapterSentMessage, String]
+  handle_agent_event(Self, ChannelMessage, @agent.AgentEvent) -> Unit = _
 }

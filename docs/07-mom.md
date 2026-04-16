@@ -17,6 +17,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - channel 消息驱动 `coding_agent.AgentSession` 执行，并把 assistant 回复回写到 log
 - `@agent.AgentEvent` 透传与运行状态跟踪
 - `workspace.mbt`：`log.jsonl` / `context.jsonl` / `MEMORY.md` 的工作区读写与恢复
+- `adapter.mbt`：`PlatformAdapter` trait、adapter outbound message、纯内存 mock adapter、端到端 dispatch helper
 
 对应源码：
 
@@ -31,7 +32,9 @@ lib/mom/
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
+├── adapter.mbt
 ├── store_test.mbt
+├── adapter_test.mbt
 ├── context_test.mbt
 ├── sandbox_test.mbt
 ├── events_test.mbt
@@ -129,6 +132,15 @@ pub(all) enum MomEvent {
 
 也就是说，channel session 现在不再只是进程内状态；它已经可以从工作区恢复 `context.jsonl`，并在每次 turn 结束后把上下文重新写回工作区。
 
+第四处是 `adapter.mbt`：
+
+- `PlatformAdapter` 定义 adapter 的最小宿主接口
+- `AdapterOutboundMessage` / `AdapterSentMessage` 定义平台无关的出站消息
+- `run_mom_turn_with_adapter(...)` 把 adapter context 注入 `MomAgent`
+- `InMemoryPlatformAdapter` 作为 mock/CLI 方向的最小可测试宿主
+
+这一步的意义不是“已经有 Slack adapter”，而是先把 `MomAgent` 和宿主之间的边界钉死。后续接真实平台时，只需要把平台事件翻译成 `ChannelMessage`，再实现 `PlatformAdapter`。
+
 另外，memory 也先做成纯文本组合函数：
 
 - workspace memory
@@ -178,7 +190,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 16 个测试，覆盖六条主线：
+`lib/mom` 当前新增 18 个测试，覆盖七条主线：
 
 ### store_test.mbt
 
@@ -208,6 +220,13 @@ pub(all) enum MomEvent {
 - 新实例可以从 `context.jsonl` 恢复已有 session transcript
 - `MEMORY.md` 会自动读入 system prompt
 
+### adapter_test.mbt
+
+- `run_mom_turn_with_adapter(...)` 会从 adapter 读取 users/channels 构造 context
+- assistant 最终回复会通过 adapter `send_message(...)` 发出去
+- raw `@agent.AgentEvent` 会转发给 adapter
+- adapter 发消息失败会被提升为 `MomAgentError::AdapterFailed`
+
 ## 当前状态
 
 phase 07 之后，`lib/mom` 已经具备：
@@ -221,6 +240,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - sandbox 参数与路径映射
 - events 解析与 prompt 支撑
 - mom system prompt 生成
+- `PlatformAdapter` 抽象与 mock adapter 接线层
 
 但还没有直接进入 MoonBit 仓库的部分仍然是宿主绑定：
 
