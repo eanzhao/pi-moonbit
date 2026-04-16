@@ -134,6 +134,27 @@ pub(all) enum MomEventPlan {
   Invalid(String, String)
 } derive(Eq)
 
+pub(all) struct MomEventWorkspaceRuntime {
+  read_text : (String) -> Result[String, String]
+  list_files : (String) -> Result[Array[String], String]
+  read_modified_at : (String) -> Result[String?, String]
+}
+
+pub(all) enum MomEventDispatchResult {
+  Triggered(MomRunResult)
+  ScheduledOneShot(MomScheduledOneShot)
+  RegisteredPeriodic(MomRegisteredPeriodic)
+  Deleted(String)
+  Invalid(String, String)
+} derive(Eq)
+
+pub(all) enum MomEventDispatchError {
+  RuntimeFailed(String)
+  InvalidChannelId(String)
+  AdapterMismatch(String)
+  AgentFailed(MomAgentError)
+} derive(Eq)
+
 pub(all) struct ChannelLog {
   adapter : String
   channel_id : String

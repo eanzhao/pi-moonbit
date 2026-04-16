@@ -10,6 +10,13 @@ pub fn workspace_events_dir(workspace_dir : String) -> String {
   mom_join_path(workspace_dir, "events")
 }
 
+pub fn workspace_event_file_path(
+  workspace_dir : String,
+  filename : String
+) -> String {
+  mom_join_path(workspace_events_dir(workspace_dir), filename)
+}
+
 pub fn workspace_channels_dir(workspace_dir : String) -> String {
   mom_join_path(workspace_dir, "channels")
 }

@@ -11,6 +11,7 @@ phase 07 没有直接把 `pi-mono/packages/mom` 的 Slack Socket Mode 和 Docker
 - sandbox 参数解析与 host/container 路径映射
 - events JSON 解析、序列化与触发消息格式化
 - `event_plan.mbt`：按当前时间把 event 文件归类为 trigger / delete / schedule / register
+- `event_host.mbt`：扫描 `workspace/events/`，把 trigger event 翻译成真正的 channel turn
 - mom system prompt 生成与 skill 列表格式化
 - 一个纯内存的 `InMemoryChannelStore`
 - `MomAgentRuntime` / `MomAgentConfig` 运行时装配
@@ -31,6 +32,7 @@ lib/mom/
 ├── sandbox.mbt
 ├── events.mbt
 ├── event_plan.mbt
+├── event_host.mbt
 ├── prompt.mbt
 ├── agent.mbt
 ├── workspace.mbt
@@ -41,6 +43,7 @@ lib/mom/
 ├── sandbox_test.mbt
 ├── events_test.mbt
 ├── event_plan_test.mbt
+├── event_host_test.mbt
 ├── prompt_test.mbt
 └── agent_test.mbt
 ```
@@ -193,7 +196,7 @@ pub(all) enum MomEvent {
 
 ## 测试覆盖
 
-`lib/mom` 当前新增 22 个测试，覆盖八条主线：
+`lib/mom` 当前新增 27 个测试，覆盖这些主线：
 
 ### store_test.mbt
 
@@ -223,6 +226,14 @@ pub(all) enum MomEvent {
 - periodic event 会登记为宿主侧持续调度
 - 非法 event 文件会保留成 `Invalid(...)` 结果，避免静默吞掉
 
+### event_host_test.mbt
+
+- `workspace/events/` 只会装载 `.json` 文件，并按 filename 稳定排序
+- workspace file metadata 会进入 planning，供 immediate staleness 判定使用
+- `Trigger(...)` 会被翻译成真正的 `ChannelMessage`
+- event target adapter 不匹配时会被宿主层直接拒绝
+- trigger plan 可以直接经由 adapter 驱动 `MomAgent`
+
 ### agent_test.mbt
 
 - `handle_message(...)` 会创建 session、透传 agent events，并写回 bot log
@@ -249,7 +260,7 @@ phase 07 之后，`lib/mom` 已经具备：
 - workspace-backed `log.jsonl` / `context.jsonl` 持久化
 - context sync 到 `SessionManager`
 - sandbox 参数与路径映射
-- events 解析、planning 与 prompt 支撑
+- events 解析、planning、workspace 扫描与 trigger dispatch
 - mom system prompt 生成
 - `PlatformAdapter` 抽象与 mock adapter 接线层
 
@@ -258,8 +269,8 @@ phase 07 之后，`lib/mom` 已经具备：
 - Slack / Discord adapter
 - 实时 socket 连接
 - 真实文件下载
-- cron / watcher 调度器
-- `events/` 目录扫描与真正的宿主执行循环
+- 真正常驻的 fs watcher / debounce 循环
+- one-shot timer / periodic cron registry
 - 真实 bash executor 和容器校验
 
 也就是说，这一版完成的是 mom 的“平台无关运行层”，而不是最终可联网运行的聊天机器人宿主。
