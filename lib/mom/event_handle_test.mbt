@@ -214,6 +214,111 @@ test "apply_event_handle_plan propagates runtime errors" {
   }
 }
 
+test "callback event handle runtime forwards operations through closures" {
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let runtime = CallbackEventHandleRuntime::new(
+    fn(watched_dir) {
+      operations.val.push(SetWatchDir(watched_dir))
+      Ok(())
+    },
+    fn(due_at_ms) {
+      operations.val.push(SetWakeup(due_at_ms))
+      Ok(())
+    },
+    fn(entry) {
+      operations.val.push(RegisterPeriodic(entry))
+      Ok(())
+    },
+    fn(filename) {
+      operations.val.push(RemovePeriodic(filename))
+      Ok(())
+    },
+  )
+
+  ignore(apply_event_handle_operations(runtime, [
+    SetWatchDir(Some("/workspace/events")),
+    SetWakeup(Some(1_100UL)),
+    RemovePeriodic("old.json"),
+    RegisterPeriodic({
+      filename: "daily.json",
+      event: {
+        channel_id: "slack-acme/C123",
+        text: "daily",
+        schedule: "0 9 * * 1-5",
+        timezone: "Asia/Singapore",
+      },
+    }),
+  ]).unwrap())
+
+  assert_eq(operations.val.length(), 4)
+  match operations.val[0] {
+    SetWatchDir(Some(path)) => assert_eq(path, "/workspace/events")
+    _ => fail("expected watch dir callback")
+  }
+  match operations.val[1] {
+    SetWakeup(Some(value)) => assert_eq(value, 1_100UL)
+    _ => fail("expected wakeup callback")
+  }
+  match operations.val[2] {
+    RemovePeriodic(filename) => assert_eq(filename, "old.json")
+    _ => fail("expected periodic removal callback")
+  }
+  match operations.val[3] {
+    RegisterPeriodic(entry) => assert_eq(entry.filename, "daily.json")
+    _ => fail("expected periodic registration callback")
+  }
+}
+
+test "apply mom host step handle operations uses step deltas only" {
+  let operations : Ref[Array[MomEventHandleOp]] = Ref::new([])
+  let runtime = CallbackEventHandleRuntime::new(
+    fn(watched_dir) {
+      operations.val.push(SetWatchDir(watched_dir))
+      Ok(())
+    },
+    fn(due_at_ms) {
+      operations.val.push(SetWakeup(due_at_ms))
+      Ok(())
+    },
+    fn(entry) {
+      operations.val.push(RegisterPeriodic(entry))
+      Ok(())
+    },
+    fn(filename) {
+      operations.val.push(RemovePeriodic(filename))
+      Ok(())
+    },
+  )
+  let step : MomHostStep = {
+    result: FileQueued([]),
+    handle_plan: None,
+    handle_operations: [
+      SetWakeup(Some(2_000UL)),
+      RegisterPeriodic({
+        filename: "daily.json",
+        event: {
+          channel_id: "slack-acme/C123",
+          text: "daily",
+          schedule: "0 9 * * 1-5",
+          timezone: "Asia/Singapore",
+        },
+      }),
+    ],
+  }
+
+  ignore(apply_mom_host_step_handle_operations(runtime, step).unwrap())
+
+  assert_eq(operations.val.length(), 2)
+  match operations.val[0] {
+    SetWakeup(Some(value)) => assert_eq(value, 2_000UL)
+    _ => fail("expected wakeup callback")
+  }
+  match operations.val[1] {
+    RegisterPeriodic(entry) => assert_eq(entry.filename, "daily.json")
+    _ => fail("expected periodic registration callback")
+  }
+}
+
 pub impl MomEventHandleRuntime for FailingHandleRuntime with set_watch_dir(self, _watched_dir) {
   if self.fail_step == "watch" {
     Err("watch failed")

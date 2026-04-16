@@ -72,7 +72,18 @@ pub fn[T : MomEventHandleRuntime] apply_event_handle_plan(
   runtime : T,
   plan : MomEventHandlePlan
 ) -> Result[MomEventHandleState, String] {
-  for operation in plan.operations() {
+  match apply_event_handle_operations(runtime, plan.operations()) {
+    Ok(_) => ()
+    Err(message) => return Err(message)
+  }
+  Ok(plan.state)
+}
+
+pub fn[T : MomEventHandleRuntime] apply_event_handle_operations(
+  runtime : T,
+  operations : Array[MomEventHandleOp]
+) -> Result[Unit, String] {
+  for operation in operations {
     match operation {
       SetWatchDir(watched_dir) =>
         match runtime.set_watch_dir(watched_dir) {
@@ -96,7 +107,14 @@ pub fn[T : MomEventHandleRuntime] apply_event_handle_plan(
         }
     }
   }
-  Ok(plan.state)
+  Ok(())
+}
+
+pub fn[T : MomEventHandleRuntime] apply_mom_host_step_handle_operations(
+  runtime : T,
+  step : MomHostStep
+) -> Result[Unit, String] {
+  apply_event_handle_operations(runtime, step.handle_operations)
 }
 
 pub fn InMemoryEventHandleRuntime::new(
@@ -134,6 +152,20 @@ pub fn InMemoryEventHandleRuntime::drain_operations(
   drained
 }
 
+pub fn CallbackEventHandleRuntime::new(
+  set_watch_dir_fn : (String?) -> Result[Unit, String],
+  set_wakeup_due_at_ms_fn : (UInt64?) -> Result[Unit, String],
+  register_periodic_fn : (MomRegisteredPeriodic) -> Result[Unit, String],
+  remove_periodic_fn : (String) -> Result[Unit, String]
+) -> CallbackEventHandleRuntime {
+  {
+    set_watch_dir_fn,
+    set_wakeup_due_at_ms_fn,
+    register_periodic_fn,
+    remove_periodic_fn,
+  }
+}
+
 pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with set_watch_dir(self, watched_dir) {
   self.watched_dir = watched_dir
   self.operations.push(SetWatchDir(watched_dir))
@@ -168,6 +200,22 @@ pub impl MomEventHandleRuntime for InMemoryEventHandleRuntime with remove_period
   }
   self.registered_periodics = retained
   Ok(())
+}
+
+pub impl MomEventHandleRuntime for CallbackEventHandleRuntime with set_watch_dir(self, watched_dir) {
+  (self.set_watch_dir_fn)(watched_dir)
+}
+
+pub impl MomEventHandleRuntime for CallbackEventHandleRuntime with set_wakeup_due_at_ms(self, due_at_ms) {
+  (self.set_wakeup_due_at_ms_fn)(due_at_ms)
+}
+
+pub impl MomEventHandleRuntime for CallbackEventHandleRuntime with register_periodic(self, entry) {
+  (self.register_periodic_fn)(entry)
+}
+
+pub impl MomEventHandleRuntime for CallbackEventHandleRuntime with remove_periodic(self, filename) {
+  (self.remove_periodic_fn)(filename)
 }
 
 fn diff_handle_added_periodics(

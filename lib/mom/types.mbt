@@ -343,6 +343,13 @@ pub(all) struct InMemoryEventHandleRuntime {
   mut operations : Array[MomEventHandleOp]
 }
 
+pub(all) struct CallbackEventHandleRuntime {
+  set_watch_dir_fn : (String?) -> Result[Unit, String]
+  set_wakeup_due_at_ms_fn : (UInt64?) -> Result[Unit, String]
+  register_periodic_fn : (MomRegisteredPeriodic) -> Result[Unit, String]
+  remove_periodic_fn : (String) -> Result[Unit, String]
+}
+
 pub(all) struct InMemoryEventWorkspace {
   mut files : Array[MomEventFile]
 }
