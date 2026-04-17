@@ -78,12 +78,7 @@ moon run src/main --target js -- --help
 
 ## NyxID 集成（推荐用法）
 
-[NyxID](https://nyx.chrono-ai.fun) 是一个**凭证代理 + LLM 网关**：你在 NyxID 面板上统一管理各家 LLM 的 API key（OpenAI / Anthropic / Gemini / Mistral 等），pimbt 通过 NyxID OAuth 登录后，调用 LLM 时由 NyxID 服务端根据 model id 自动路由到对应 provider 并注入凭证——pimbt 本地**不接触任何 LLM API key**。
-
-好处：
-- 一次登录，用遍所有已在 NyxID 配好的 provider
-- key 泄露风险集中在 NyxID 服务端（轮换、吊销更容易）
-- 可以多设备同步，无需到处 `export OPENAI_API_KEY=...`
+好处：一次登录用遍所有已在 NyxID 配好的 provider；key 集中放服务端，轮换/吊销更容易；多设备同步，无需到处 `export OPENAI_API_KEY=...`。**pimbt 本地不接触任何 LLM API key**。
 
 ### 注册 NyxID 账号
 
@@ -102,13 +97,17 @@ pimbt login
 pimbt providers connect openai       # 命令行内提示你贴 sk-... key
 pimbt providers connect anthropic    # 也可以 --api-key sk-ant-... 直接传
 
-# 3. 看看连了什么、有哪些可用模型
-pimbt providers list
-pimbt models
+# 3. 最简单的用法：直接 `pimbt`，进入 provider → 模型 两层交互选择器
+#    （TTY 下方向键导航，真实 model id 从各 provider 的 /models 端点实时拉取）
+pimbt
 
-# 之后直接用 — NyxID 根据 model id 自动路由到对应 provider
+# 或者直接传 --model，NyxID 按 model id 自动路由到对应 provider：
 pimbt --api nyxid-gateway --model gpt-5.4 "write a fib function"
 pimbt --api nyxid-gateway --model claude-sonnet-4-5-20250929 "explain quicksort"
+
+# 查看已连接 provider 和网关的前缀路由规则：
+pimbt providers list
+pimbt models
 ```
 
 `--model` 可以填任何你在 NyxID 上配过 provider 的模型 id，pimbt 这边没有写死白名单。
@@ -160,5 +159,5 @@ pi-moonbit/
 ## 参考
 
 - [pi-mono](https://github.com/badlogic/pi-mono) — 原始 TypeScript 实现
-- [NyxID](https://github.com/eanzhao/NyxID) — 凭证代理 / OAuth IdP
+- [NyxID](https://github.com/ChronoAIProject/NyxID) — 凭证代理 / OAuth IdP
 - [MoonBit 文档](https://docs.moonbitlang.com/) — 语言参考

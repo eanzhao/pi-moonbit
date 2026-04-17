@@ -66,13 +66,7 @@ pimbt --api nyxid-gateway --model gpt-5.4 "hello"
 
 ## Using pimbt with NyxID (recommended)
 
-[NyxID](https://nyx.chrono-ai.fun) is a credential-brokering LLM gateway. You store your LLM provider keys (OpenAI / Anthropic / Gemini / Mistral / ...) once in NyxID's panel; pimbt authenticates with NyxID over OAuth and proxies every LLM call through the gateway. **pimbt never sees raw LLM API keys.**
-
-Benefits:
-
-- One login, use every provider you've configured on NyxID.
-- Keys sit server-side — easier to rotate or revoke.
-- Works across devices — no `export OPENAI_API_KEY=...` sprinkled everywhere.
+Why: one login, all providers; keys sit server-side so they're easier to rotate or revoke; no `export OPENAI_API_KEY=...` sprinkled across machines. **pimbt never sees raw LLM API keys.**
 
 ### Register on NyxID
 
@@ -91,13 +85,18 @@ pimbt login
 pimbt providers connect openai       # prompts for your sk-... key
 pimbt providers connect anthropic    # or: --api-key sk-ant-... to skip the prompt
 
-# 3. Inspect what's connected
-pimbt providers list
-pimbt models                         # full provider + model-id listing
+# 3. Easiest path: just run `pimbt` — it walks you through an interactive
+#    provider → model picker (arrow keys on TTY, real model IDs fetched
+#    live from each provider's /models endpoint).
+pimbt
 
-# 4. Talk to a model — NyxID routes by model id automatically
+# 4. Or pass --model directly. NyxID routes by model id automatically.
 pimbt --api nyxid-gateway --model gpt-5.4 "write a fib function"
 pimbt --api nyxid-gateway --model claude-sonnet-4-5-20250929 "explain quicksort"
+
+# Inspect what's connected / the gateway's prefix-routing rules:
+pimbt providers list
+pimbt models
 ```
 
 `--model` accepts any model id NyxID knows about for a provider you've connected. pimbt does not hard-code a model whitelist.
@@ -168,7 +167,7 @@ Each phase has a design doc explaining what was built, why, and how it differs f
 ## References
 
 - [pi-mono](https://github.com/badlogic/pi-mono) — original TypeScript implementation
-- [NyxID](https://github.com/eanzhao/NyxID) — credential broker / OAuth IdP
+- [NyxID](https://github.com/ChronoAIProject/NyxID) — credential broker / OAuth IdP
 - [MoonBit docs](https://docs.moonbitlang.com/) — language reference
 
 ## License
