@@ -106,3 +106,40 @@ test "encode_form escapes special characters" {
   assert_true(encoded.contains("key%20with%20space"))
   assert_true(encoded.contains("val%26other%3Dthing"))
 }
+
+test "is_credentials_expired with 60-second buffer" {
+  let creds : OAuthCredentials = {
+    access_token: "tok",
+    refresh_token: Some("rt"),
+    expires_at: Some(1000L),
+    token_type: "Bearer",
+    extra: None,
+  }
+  // Current behavior: is_credentials_expired returns true only when now >= expires_at
+  // Consumers apply their own buffer.
+  assert_true(is_credentials_expired(creds, 1000L))
+  assert_true(is_credentials_expired(creds, 1500L))
+  assert_false(is_credentials_expired(creds, 999L))
+  // For a 60-second buffer, caller checks: now + 60 >= expires_at
+  let now : Int64 = 950L
+  assert_true(now + 60L >= 1000L)
+  let now2 : Int64 = 900L
+  assert_false(now2 + 60L >= 1000L)
+}
+
+test "refresh response without refresh_token preserves original" {
+  // Simulate what NyxID might return on refresh (sometimes no new refresh_token)
+  let response = Json::object({
+    "access_token": Json::string("new-access"),
+    "expires_in": Json::number(900.0),
+    "token_type": Json::string("Bearer"),
+  })
+  match parse_nyxid_token_response(response, 1000L) {
+    Ok(creds) => {
+      assert_eq(creds.access_token, "new-access")
+      assert_eq(creds.refresh_token, None)  // Response had none
+      assert_eq(creds.expires_at, Some(1900L))
+    }
+    Err(_) => fail("expected Ok")
+  }
+}

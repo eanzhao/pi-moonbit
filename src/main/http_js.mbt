@@ -360,6 +360,9 @@ fn host_mistral_stream(
 }
 
 ///| 解析 NyxID 认证信息：返回 (base_url, bearer_token, api_key)。
+///
+/// 从存储的凭证文件加载时，自动检测 access_token 是否即将过期
+/// （60 秒缓冲），如果是则用 refresh_token 刷新并写回新凭证。
 fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String, String, String) {
   // 优先级 1: options.api_key as Bearer
   match options.api_key {
@@ -390,30 +393,122 @@ fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String
     }
     return (base, "", env_api_key)
   }
-  // 优先级 4: stored credentials file
+  // 优先级 4: stored credentials file (with auto-refresh)
+  let creds_path = nyxid_credentials_path()
+  let fallback_base = match model.base_url {
+    Some(url) => url
+    None => "https://nyx.chrono-ai.fun"
+  }
+  match host_read_text(creds_path) {
+    Ok(text) => {
+      let json = try { @json.parse(text) } catch { _ => return (fallback_base, "", "") }
+      match @ai.parse_nyxid_stored_credentials(json) {
+        Ok(stored) => {
+          // Check expiry with 60-second buffer
+          let now = nyxid_now_epoch_seconds()
+          let refreshed = match stored.credentials.expires_at {
+            Some(exp) if now + 60L >= exp => {
+              // Token expired or about to — try refresh
+              try_refresh_nyxid_token(stored, creds_path)
+            }
+            _ => stored  // Not expired, use as-is
+          }
+          (refreshed.base_url, refreshed.credentials.access_token, "")
+        }
+        Err(_) => (fallback_base, "", "")
+      }
+    }
+    Err(_) => (fallback_base, "", "")
+  }
+}
+
+///| 尝试刷新 NyxID access token。失败时返回原凭证。
+fn try_refresh_nyxid_token(
+  stored : @ai.NyxidStoredCredentials,
+  creds_path : String
+) -> @ai.NyxidStoredCredentials {
+  let refresh_token = match stored.credentials.refresh_token {
+    Some(rt) if rt.length() > 0 => rt
+    _ => return stored  // No refresh token, can't refresh
+  }
+  let form = @ai.build_nyxid_refresh_form(refresh_token, stored.client_id, None)
+  let form_body = @ai.encode_form(form)
+  let token_url = nyxid_trim_slash(stored.base_url) + @ai.nyxid_oauth_token_path
+  match host_post_form(token_url, form_body) {
+    Ok((_status, body)) => {
+      let json = try { @json.parse(body) } catch { _ => return stored }
+      let now = nyxid_now_epoch_seconds()
+      match @ai.parse_nyxid_token_response(json, now) {
+        Ok(new_creds) => {
+          // Preserve old refresh_token if server didn't return new one
+          let preserved_refresh = match new_creds.refresh_token {
+            Some(_) => new_creds.refresh_token
+            None => stored.credentials.refresh_token
+          }
+          let final_creds : @ai.OAuthCredentials = { ..new_creds, refresh_token: preserved_refresh }
+          let final_stored : @ai.NyxidStoredCredentials = {
+            base_url: stored.base_url,
+            client_id: stored.client_id,
+            credentials: final_creds,
+          }
+          // Best-effort persist; even if write fails, use in-memory
+          let json_out = @ai.nyxid_credentials_to_json(final_creds, stored.base_url, stored.client_id)
+          let _ = host_write_text(creds_path, json_out.stringify(escape_slash=false))
+          final_stored
+        }
+        Err(_) => stored
+      }
+    }
+    Err(_) => stored
+  }
+}
+
+fn nyxid_credentials_path() -> String {
   let home = host_env_var("HOME").unwrap_or(".")
-  let creds_path = if home.has_suffix("/") {
+  if home.has_suffix("/") {
     home + ".pimbt/nyxid-credentials.json"
   } else {
     home + "/.pimbt/nyxid-credentials.json"
   }
-  match host_read_text(creds_path) {
-    Ok(text) => {
-      let json = try { @json.parse(text) } catch { _ => return ("https://nyx.chrono-ai.fun", "", "") }
-      match @ai.parse_nyxid_stored_credentials(json) {
-        Ok(stored) => (stored.base_url, stored.credentials.access_token, "")
-        Err(_) => ("https://nyx.chrono-ai.fun", "", "")
-      }
-    }
-    Err(_) => {
-      // Fallback: model.base_url or default, no auth
-      let base = match model.base_url {
-        Some(url) => url
-        None => "https://nyx.chrono-ai.fun"
-      }
-      (base, "", "")
-    }
+}
+
+fn nyxid_trim_slash(s : String) -> String {
+  if s.has_suffix("/") { s[:s.length() - 1].to_string() } else { s }
+}
+
+///| 当前 epoch 秒数（从 host_now_iso 解析）。
+fn nyxid_now_epoch_seconds() -> Int64 {
+  nyxid_parse_iso_to_epoch(host_now_iso())
+}
+
+fn nyxid_parse_iso_to_epoch(iso : String) -> Int64 {
+  if iso.length() < 19 { return 0L }
+  let year = nyxid_parse_int_or(iso[0:4].to_string(), 1970)
+  let month = nyxid_parse_int_or(iso[5:7].to_string(), 1)
+  let day = nyxid_parse_int_or(iso[8:10].to_string(), 1)
+  let hour = nyxid_parse_int_or(iso[11:13].to_string(), 0)
+  let minute = nyxid_parse_int_or(iso[14:16].to_string(), 0)
+  let second = nyxid_parse_int_or(iso[17:19].to_string(), 0)
+  nyxid_days_from_civil(year, month, day) * 86400L +
+    hour.to_int64() * 3600L +
+    minute.to_int64() * 60L +
+    second.to_int64()
+}
+
+fn nyxid_parse_int_or(s : String, default : Int) -> Int {
+  match (try? @string.parse_int(s)) {
+    Ok(n) => n
+    Err(_) => default
   }
+}
+
+fn nyxid_days_from_civil(y : Int, m : Int, d : Int) -> Int64 {
+  let year = if m <= 2 { y - 1 } else { y }
+  let era = if year >= 0 { year / 400 } else { (year - 399) / 400 }
+  let yoe = year - era * 400
+  let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  era.to_int64() * 146097L + doe.to_int64() - 719468L
 }
 
 extern "js" fn host_env_var_ffi(name : String) -> String =
