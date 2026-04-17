@@ -24,17 +24,49 @@ pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包
 | `lib/mom` | ✅ 完整 | 平台无关 channel 模型、Slack 适配器、事件循环/定时器/watcher/host driver |
 | `lib/pods` | ✅ 完整 | PodRegistry、SSH/SCP 命令构建、vLLM 部署命令 |
 
-## 快速开始
+## 安装
 
-需要先安装 [MoonBit 工具链](https://www.moonbitlang.com/download/)。
+### 前置要求
+
+- [MoonBit 工具链](https://www.moonbitlang.com/download/)
+- Node.js 18+（pimbt 目前在 JS target 下运行）
+
+### 一键安装
+
+```bash
+git clone https://github.com/eanzhao/pi-moonbit.git
+cd pi-moonbit
+./scripts/install.sh
+```
+
+默认安装到 `~/.local/bin/pimbt`（把 `~/.local/bin` 加到 PATH 即可用）。
+
+其他选项：
+
+```bash
+PREFIX=/usr/local ./scripts/install.sh   # 系统级安装（可能需要 sudo）
+./scripts/install.sh --symlink           # 开发模式：symlink main.js，重新 moon build 后自动生效
+./scripts/install.sh --uninstall         # 卸载
+```
+
+安装后：
+
+```bash
+pimbt --help
+pimbt login                              # 浏览器登录 NyxID
+pimbt providers connect openai           # 添加 LLM key
+pimbt --api nyxid-gateway --model gpt-4o "hello"
+```
+
+### 开发者命令
 
 ```bash
 moon check          # 类型检查
 moon build          # 编译
-moon test           # 运行全部 323 个测试
+moon test           # 运行全部测试
 moon test lib/ai    # 运行某个包的测试
 
-# 运行 CLI（JS target）
+# 不走 install 直接运行
 moon run src/main --target js -- --help
 ```
 
