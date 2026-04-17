@@ -29,3 +29,11 @@ fn host_wait_cli_callback(
 fn host_get(_url : String) -> Result[(Int, String), String] {
   Err("HTTP GET is not implemented for native target")
 }
+
+fn host_post_json_bearer(_url : String, _body : String, _bearer : String) -> Result[(Int, String), String] {
+  Err("HTTP POST JSON is not implemented for native target")
+}
+
+fn host_delete_bearer(_url : String, _bearer : String) -> Result[(Int, String), String] {
+  Err("HTTP DELETE is not implemented for native target")
+}

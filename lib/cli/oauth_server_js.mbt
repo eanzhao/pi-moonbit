@@ -341,3 +341,121 @@ fn host_get_bearer(url : String, bearer : String) -> Result[(Int, String), Strin
 fn host_open_browser(url : String) -> Unit {
   host_open_browser_ffi(url)
 }
+
+///| POST JSON body with Bearer auth. Returns (status, body).
+extern "js" fn host_post_json_bearer_ffi(url : String, body : String, bearer : String) -> Array[String] =
+  #|(url, body, bearer) => {
+  #|  try {
+  #|    const { execSync } = require("child_process");
+  #|    const fs = require("fs");
+  #|    const os = require("os");
+  #|    const tmp = os.tmpdir() + "/pimbt-post-json-" + Date.now() + "-" + process.pid + ".js";
+  #|    fs.writeFileSync(tmp, `
+  #|      const http = require("http");
+  #|      const https = require("https");
+  #|      const { URL } = require("url");
+  #|      const parsed = new URL(${JSON.stringify(url)});
+  #|      const lib = parsed.protocol === "https:" ? https : http;
+  #|      const body = ${JSON.stringify(body)};
+  #|      const headers = {
+  #|        "Content-Type": "application/json",
+  #|        "Accept": "application/json",
+  #|        "Content-Length": Buffer.byteLength(body).toString(),
+  #|      };
+  #|      const bearer = ${JSON.stringify(bearer)};
+  #|      if (bearer) headers["Authorization"] = "Bearer " + bearer;
+  #|      const req = lib.request(parsed, {
+  #|        method: "POST",
+  #|        headers,
+  #|        timeout: 30000,
+  #|      }, (res) => {
+  #|        let data = "";
+  #|        res.on("data", (c) => { data += c; });
+  #|        res.on("end", () => {
+  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|        });
+  #|        res.on("error", (e) => {
+  #|          process.stdout.write(JSON.stringify(["err", e.message]));
+  #|        });
+  #|      });
+  #|      req.on("error", (e) => {
+  #|        process.stdout.write(JSON.stringify(["err", e.message]));
+  #|      });
+  #|      req.write(body);
+  #|      req.end();
+  #|    `);
+  #|    const out = execSync("node " + JSON.stringify(tmp), {
+  #|      maxBuffer: 10 * 1024 * 1024,
+  #|      timeout: 35000,
+  #|    });
+  #|    try { fs.unlinkSync(tmp); } catch {}
+  #|    return JSON.parse(out.toString());
+  #|  } catch (e) {
+  #|    return ["err", e.message || String(e)];
+  #|  }
+  #|}
+
+///| DELETE with Bearer auth. Returns (status, body).
+extern "js" fn host_delete_bearer_ffi(url : String, bearer : String) -> Array[String] =
+  #|(url, bearer) => {
+  #|  try {
+  #|    const { execSync } = require("child_process");
+  #|    const fs = require("fs");
+  #|    const os = require("os");
+  #|    const tmp = os.tmpdir() + "/pimbt-delete-" + Date.now() + "-" + process.pid + ".js";
+  #|    fs.writeFileSync(tmp, `
+  #|      const http = require("http");
+  #|      const https = require("https");
+  #|      const { URL } = require("url");
+  #|      const parsed = new URL(${JSON.stringify(url)});
+  #|      const lib = parsed.protocol === "https:" ? https : http;
+  #|      const headers = { "Accept": "application/json" };
+  #|      const bearer = ${JSON.stringify(bearer)};
+  #|      if (bearer) headers["Authorization"] = "Bearer " + bearer;
+  #|      const req = lib.request(parsed, {
+  #|        method: "DELETE",
+  #|        headers,
+  #|        timeout: 30000,
+  #|      }, (res) => {
+  #|        let data = "";
+  #|        res.on("data", (c) => { data += c; });
+  #|        res.on("end", () => {
+  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|        });
+  #|        res.on("error", (e) => {
+  #|          process.stdout.write(JSON.stringify(["err", e.message]));
+  #|        });
+  #|      });
+  #|      req.on("error", (e) => {
+  #|        process.stdout.write(JSON.stringify(["err", e.message]));
+  #|      });
+  #|      req.end();
+  #|    `);
+  #|    const out = execSync("node " + JSON.stringify(tmp), {
+  #|      maxBuffer: 10 * 1024 * 1024,
+  #|      timeout: 35000,
+  #|    });
+  #|    try { fs.unlinkSync(tmp); } catch {}
+  #|    return JSON.parse(out.toString());
+  #|  } catch (e) {
+  #|    return ["err", e.message || String(e)];
+  #|  }
+  #|}
+
+fn host_post_json_bearer(url : String, body : String, bearer : String) -> Result[(Int, String), String] {
+  let result = host_post_json_bearer_ffi(url, body, bearer)
+  if result.length() == 0 { return Err("empty response") }
+  if result[0] == "err" { return Err(if result.length() > 1 { result[1] } else { "unknown error" }) }
+  if result.length() < 3 { return Err("malformed response") }
+  let status = try @string.parse_int(result[1]) catch { _ => 0 } noraise { n => n }
+  Ok((status, result[2]))
+}
+
+fn host_delete_bearer(url : String, bearer : String) -> Result[(Int, String), String] {
+  let result = host_delete_bearer_ffi(url, bearer)
+  if result.length() == 0 { return Err("empty response") }
+  if result[0] == "err" { return Err(if result.length() > 1 { result[1] } else { "unknown error" }) }
+  if result.length() < 3 { return Err("malformed response") }
+  let status = try @string.parse_int(result[1]) catch { _ => 0 } noraise { n => n }
+  Ok((status, result[2]))
+}

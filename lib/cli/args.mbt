@@ -14,6 +14,9 @@ pub fn parse_cli_args(
   if argv.length() >= 2 && argv[1] == "models" {
     return parse_models_args(argv, cwd)
   }
+  if argv.length() >= 2 && argv[1] == "providers" {
+    return parse_providers_args(argv, cwd)
+  }
   let mut mode = CliMode::Interactive
   let mut system_prompt = default_system_prompt()
   let mut session_path_arg : String? = None
@@ -164,7 +167,8 @@ pub fn cli_help_text() -> String {
     "",
     "Usage:",
     "  pimbt [options] [messages...]",
-    "  pimbt login --client-id <id>   # OAuth login (NyxID)",
+    "  pimbt login                    # OAuth login to NyxID (simplified)",
+    "  pimbt providers <action>       # manage LLM provider credentials on NyxID",
     "  pimbt models                   # list providers + models on your NyxID account",
     "",
     "Options:",
@@ -367,6 +371,109 @@ fn parse_models_args(argv : Array[String], cwd : String) -> Result[CliParseResul
     credentials_path: creds_path,
     bearer_override,
   }))
+}
+
+fn parse_providers_args(argv : Array[String], cwd : String) -> Result[CliParseResult, String] {
+  if argv.length() < 3 {
+    return Ok(CliParseResult::Help(providers_help_text()))
+  }
+  let action_name = argv[2]
+  if action_name == "--help" || action_name == "-h" {
+    return Ok(CliParseResult::Help(providers_help_text()))
+  }
+  let mut base_url = host_env_var("NYXID_BASE_URL").unwrap_or(@ai.nyxid_default_base_url)
+  let mut creds_path = credentials_default_path(cwd)
+  let mut bearer_override : String? = None
+  let mut api_key : String? = None
+  let mut label : String? = None
+  let mut target : String? = None  // provider slug or id for connect/disconnect
+
+  let mut i = 3
+  while i < argv.length() {
+    let arg = argv[i]
+    if arg == "--help" || arg == "-h" {
+      return Ok(CliParseResult::Help(providers_help_text()))
+    } else if arg == "--base-url" {
+      guard i + 1 < argv.length() else { return Err("missing value for --base-url") }
+      i = i + 1
+      base_url = argv[i]
+    } else if arg == "--credentials-path" {
+      guard i + 1 < argv.length() else { return Err("missing value for --credentials-path") }
+      i = i + 1
+      creds_path = argv[i]
+    } else if arg == "--bearer" {
+      guard i + 1 < argv.length() else { return Err("missing value for --bearer") }
+      i = i + 1
+      bearer_override = Some(argv[i])
+    } else if arg == "--api-key" {
+      guard i + 1 < argv.length() else { return Err("missing value for --api-key") }
+      i = i + 1
+      api_key = Some(argv[i])
+    } else if arg == "--label" {
+      guard i + 1 < argv.length() else { return Err("missing value for --label") }
+      i = i + 1
+      label = Some(argv[i])
+    } else if arg.has_prefix("-") {
+      return Err("unknown providers option: " + arg)
+    } else if target is None {
+      target = Some(arg)
+    } else {
+      return Err("unexpected positional argument: " + arg)
+    }
+    i = i + 1
+  }
+
+  let action = match action_name {
+    "list" | "ls" => ProvidersAction::List
+    "connect" | "add" =>
+      match target {
+        Some(slug) => ProvidersAction::Connect(slug)
+        None => return Err("providers connect: missing provider slug (e.g., openai)")
+      }
+    "disconnect" | "remove" | "rm" =>
+      match target {
+        Some(id) => ProvidersAction::Disconnect(id)
+        None => return Err("providers disconnect: missing provider id")
+      }
+    _ => return Err("unknown providers action: " + action_name)
+  }
+
+  Ok(CliParseResult::Providers({
+    action,
+    base_url,
+    credentials_path: creds_path,
+    bearer_override,
+    api_key,
+    label,
+  }))
+}
+
+pub fn providers_help_text() -> String {
+  [
+    "pimbt providers - manage LLM provider credentials on your NyxID account",
+    "",
+    "Usage:",
+    "  pimbt providers list                          # show connected providers",
+    "  pimbt providers connect <slug> [--api-key K]  # connect (prompts if --api-key omitted)",
+    "  pimbt providers disconnect <provider_id>      # remove a connection",
+    "",
+    "Common provider slugs:",
+    "  openai, anthropic, gemini, mistral, groq, xai, cohere, deepseek",
+    "",
+    "Options:",
+    "  --api-key <key>            API key (if omitted, prompted on connect)",
+    "  --label <name>             Optional label for this credential",
+    "  --base-url <url>           NyxID base URL (default: https://nyx.chrono-ai.fun)",
+    "  --credentials-path <path>  Credentials file (default: ~/.pimbt/nyxid-credentials.json)",
+    "  --bearer <token>           Use this Bearer token instead of stored credentials",
+    "",
+    "Example:",
+    "  pimbt providers connect openai --api-key sk-...",
+    "  pimbt providers list",
+    "  pimbt providers disconnect abc123...",
+    "",
+    "If you haven't logged in yet, run `pimbt login` first.",
+  ].join("\n")
 }
 
 pub fn models_help_text() -> String {

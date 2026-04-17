@@ -23,6 +23,22 @@ pub(all) enum CliParseResult {
   Help(String)
   Login(LoginConfig)
   Models(ModelsConfig)
+  Providers(ProvidersConfig)
+}
+
+pub(all) enum ProvidersAction {
+  List
+  Connect(String)      // provider slug
+  Disconnect(String)   // provider id
+}
+
+pub(all) struct ProvidersConfig {
+  action : ProvidersAction
+  base_url : String
+  credentials_path : String
+  bearer_override : String?
+  api_key : String?    // for `connect`; if None, prompt interactively
+  label : String?
 }
 
 pub(all) struct ModelsConfig {

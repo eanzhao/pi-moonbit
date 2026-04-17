@@ -137,12 +137,57 @@ pub fn run_nyxid_login(
 
   write_out(
     @tui.ansi_bold() + @tui.ansi_green() + "✓ Login successful!" + @tui.ansi_reset() + "\n" +
-    @tui.ansi_info("Credentials saved to " + config.credentials_path) + "\n" +
-    @tui.ansi_info("Next: configure LLM providers on the dashboard, then run:") + "\n" +
-    @tui.ansi_info("  pimbt --api nyxid-gateway --model <model> \"your prompt\"") + "\n",
+    @tui.ansi_info("Credentials saved to " + config.credentials_path) + "\n\n",
   )
 
+  // Self-check: probe /api/v1/llm/status to show connected providers or guide the user.
+  show_post_login_status(config.base_url, access_token, runtime)
+
   0
+}
+
+///| 登录后自检：查询 NyxID 的 LLM status，告诉用户下一步要做什么。
+///
+/// 三种情况：
+/// - 已连接 provider → 显示列表 + 怎么调模型
+/// - 没连接任何 provider → 提示用 `pimbt providers connect`
+/// - 请求失败 → 静默忽略（login 本身已经成功）
+fn show_post_login_status(base_url : String, bearer : String, runtime : CliHostRuntime) -> Unit {
+  let status_url = trim_trail_slash(base_url) + @ai.nyxid_llm_status_path
+  match host_get_bearer(status_url, bearer) {
+    Ok((status, body)) if status < 400 => {
+      let json = try { @json.parse(body) } catch { _ => return }
+      let parsed = match @ai.parse_nyxid_llm_status(json) {
+        Ok(s) => s
+        Err(_) => return
+      }
+      let connected : Array[@ai.LlmProviderStatus] = []
+      for p in parsed.providers {
+        if p.status == "connected" || p.status == "ready" {
+          connected.push(p)
+        }
+      }
+      let write_out = runtime.stdout_write
+      if connected.length() > 0 {
+        write_out(@tui.ansi_section_header("Connected Providers") + "\n")
+        for p in connected {
+          write_out("  " + @tui.ansi_green() + "✓" + @tui.ansi_reset() + " " + p.provider_slug + "\n")
+        }
+        write_out("\n" + @tui.ansi_info("You're all set. Try:") + "\n")
+        if parsed.supported_models.length() > 0 {
+          write_out("  pimbt --api nyxid-gateway --model " + parsed.supported_models[0] + " \"hello\"\n")
+        } else {
+          write_out("  pimbt --api nyxid-gateway --model <model-id> \"hello\"\n")
+        }
+      } else {
+        write_out(@tui.ansi_section_header("No LLM providers connected yet") + "\n")
+        write_out(@tui.ansi_info("Add one with:") + "\n")
+        write_out("  pimbt providers connect openai     " + @tui.ansi_dim() + "# or anthropic, gemini, mistral..." + @tui.ansi_reset() + "\n\n")
+        write_out(@tui.ansi_info("Or configure in the web panel: " + base_url + "/providers") + "\n")
+      }
+    }
+    _ => ()  // Silently skip on error; login itself succeeded
+  }
 }
 
 ///| 兼容保留：标准 OAuth 2.0 + PKCE 登录流程（需要 client_id）。
