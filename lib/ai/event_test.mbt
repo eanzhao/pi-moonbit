@@ -31,7 +31,7 @@ test "final_message extracts from terminal events" {
     content: [Text("result")],
     api: api_openai_responses,
     provider: provider_openai,
-    model: "gpt-4o",
+    model: "gpt-5.4",
     usage: Usage::zero(),
     stop_reason: Stop,
     error_message: None,
@@ -39,7 +39,7 @@ test "final_message extracts from terminal events" {
   }
   let done = AssistantMessageEvent::Done(Stop, msg)
   match final_message(done) {
-    Some(m) => assert_eq(m.model, "gpt-4o")
+    Some(m) => assert_eq(m.model, "gpt-5.4")
     None => fail("expected Some")
   }
   let non_terminal = AssistantMessageEvent::ThinkingDelta(0, "thinking...")

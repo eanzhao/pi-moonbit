@@ -24,15 +24,15 @@ test "build_system_prompt includes tools and guidelines" {
 
 test "settings manager round trips values" {
   let settings = SettingsManager::new()
-  settings.set_model_id("gpt-4o")
+  settings.set_model_id("gpt-5.4")
   settings.set_thinking_level("high")
   settings.set_active_tools(["read", "write"])
-  assert_eq(settings.get_model_id(), Some("gpt-4o"))
+  assert_eq(settings.get_model_id(), Some("gpt-5.4"))
   assert_eq(settings.get_thinking_level(), Some("high"))
   assert_eq(settings.get_active_tools(), ["read", "write"])
   let json = settings.to_json()
   let restored = SettingsManager::load_from_json(json)
-  assert_eq(restored.get_model_id(), Some("gpt-4o"))
+  assert_eq(restored.get_model_id(), Some("gpt-5.4"))
 }
 
 test "slash command registry parses and executes" {
@@ -91,7 +91,7 @@ test "export_session_html produces valid html structure" {
       timestamp: 0.0,
     }),
   ]
-  let html = export_session_html(messages, "Test Session", "gpt-4o", "2026-04-16")
+  let html = export_session_html(messages, "Test Session", "gpt-5.4", "2026-04-16")
   assert_true(html.contains("<!DOCTYPE html>"))
   assert_true(html.contains("&lt;world&gt;"))
   assert_true(html.contains("<strong>hi</strong>"))

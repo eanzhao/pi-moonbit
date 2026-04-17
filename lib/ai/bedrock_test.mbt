@@ -43,8 +43,8 @@ test "vertex url construction" {
 }
 
 test "azure url construction" {
-  let url = build_azure_url("my-resource", "gpt-4o")
+  let url = build_azure_url("my-resource", "gpt-5.4")
   assert_true(url.contains("my-resource.openai.azure.com"))
-  assert_true(url.contains("deployments/gpt-4o"))
+  assert_true(url.contains("deployments/gpt-5.4"))
   assert_true(url.contains("api-version="))
 }

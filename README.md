@@ -26,6 +26,10 @@ pi-mono is an AI agent toolkit written in TypeScript by Mario Zechner (creator o
 | `lib/mom` | ✅ complete | Platform-neutral channel model, Slack adapter, event loop / timer / watcher / host driver |
 | `lib/pods` | ✅ complete | `PodRegistry`, SSH/SCP command builders, vLLM deployment commands |
 
+## About NyxID
+
+[NyxID](https://github.com/ChronoAIProject/NyxID) is an open-source credential broker and service gateway. You connect external services once (LLM providers, SSH hosts, MCP servers, OAuth apps) and then use them from any client — CLI, IDE, AI agent — without re-configuring keys locally. For pimbt, NyxID's LLM gateway is the default path: your provider keys live on the NyxID server, pimbt authenticates via OAuth, and every chat call is routed and credential-injected server-side.
+
 ## Install
 
 ### Prerequisites
@@ -57,7 +61,7 @@ After install:
 pimbt --help
 pimbt login                              # browser-based NyxID login
 pimbt providers connect openai           # paste an LLM API key
-pimbt --api nyxid-gateway --model gpt-4o "hello"
+pimbt --api nyxid-gateway --model gpt-5.4 "hello"
 ```
 
 ## Using pimbt with NyxID (recommended)
@@ -92,7 +96,7 @@ pimbt providers list
 pimbt models                         # full provider + model-id listing
 
 # 4. Talk to a model — NyxID routes by model id automatically
-pimbt --api nyxid-gateway --model gpt-4o "write a fib function"
+pimbt --api nyxid-gateway --model gpt-5.4 "write a fib function"
 pimbt --api nyxid-gateway --model claude-sonnet-4-5-20250929 "explain quicksort"
 ```
 
@@ -104,7 +108,7 @@ If you'd rather skip NyxID and manage keys yourself:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-pimbt --api openai-responses --model gpt-4o "hello"
+pimbt --api openai-responses --model gpt-5.4 "hello"
 
 export ANTHROPIC_API_KEY=sk-ant-...
 pimbt --api anthropic-messages --model claude-sonnet-4-5 "hello"

@@ -85,7 +85,7 @@ pub fn run_models_command(config : ModelsConfig, runtime : CliHostRuntime) -> In
 /// {
 ///   "providers": [{ "name": "openai", "status": "ready", ... }, ...],
 ///   "gateway_url": "...",
-///   "supported_models": ["gpt-4o", "claude-sonnet-4-5", ...]
+///   "supported_models": ["gpt-5.4", "claude-sonnet-4-5", ...]
 /// }
 /// ```
 pub fn format_llm_status(json : Json) -> String {
@@ -107,8 +107,11 @@ pub fn format_llm_status(json : Json) -> String {
   }
   sb.write_string("\n")
 
-  // Supported models
-  sb.write_string(@tui.ansi_section_header("Supported Models") + "\n")
+  // Routing patterns (NOT real model IDs — the gateway uses these to decide
+  // which provider to forward to; you pass a concrete id like gpt-4o, not gpt-*).
+  sb.write_string(@tui.ansi_section_header("Routing Patterns") + "\n")
+  sb.write_string("  " + @tui.ansi_dim() +
+    "(prefix → provider map used by the gateway)" + @tui.ansi_reset() + "\n")
   match json {
     Object({ "supported_models": Array(models), .. }) => {
       if models.length() == 0 {
@@ -128,7 +131,10 @@ pub fn format_llm_status(json : Json) -> String {
   // Usage hint
   sb.write_string("\n")
   sb.write_string(@tui.ansi_info(
-    "Use with: pimbt --api nyxid-gateway --model <id> \"...\"",
+    "For an interactive picker with real model IDs, run: pimbt",
+  ) + "\n")
+  sb.write_string(@tui.ansi_info(
+    "Or pass one directly: pimbt --api nyxid-gateway --model <id> \"...\"",
   ) + "\n")
 
   sb.to_string()

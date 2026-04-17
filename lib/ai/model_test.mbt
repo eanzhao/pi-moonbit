@@ -35,7 +35,7 @@ test "calculate_cost" {
 
 test "models_are_equal" {
   let base : Model = {
-    id: "gpt-4o",
+    id: "gpt-5.4",
     name: "GPT-4o",
     api: api_openai_responses,
     provider: provider_openai,
@@ -47,7 +47,7 @@ test "models_are_equal" {
     max_tokens: 16_384,
   }
   let same : Model = {
-    id: "gpt-4o",
+    id: "gpt-5.4",
     name: "GPT-4o (different name)",
     api: api_openai_completions,
     provider: provider_openai,
@@ -59,7 +59,7 @@ test "models_are_equal" {
     max_tokens: 8_192,
   }
   let different : Model = {
-    id: "gpt-4o-mini",
+    id: "gpt-5.4-mini",
     name: "GPT-4o Mini",
     api: api_openai_responses,
     provider: provider_openai,

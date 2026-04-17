@@ -491,7 +491,7 @@ test "format_llm_status renders providers and supported models" {
     ]),
     "gateway_url": Json::string("https://nyx.example.com/api/v1/llm/gateway"),
     "supported_models": Json::array([
-      Json::string("gpt-4o"),
+      Json::string("gpt-5.4"),
       Json::string("claude-sonnet-4-5-20250929"),
     ]),
   })
@@ -501,8 +501,8 @@ test "format_llm_status renders providers and supported models" {
   assert_true(rendered.contains("ready"))
   assert_true(rendered.contains("anthropic"))
   assert_true(rendered.contains("not_connected"))
-  assert_true(rendered.contains("Supported Models"))
-  assert_true(rendered.contains("gpt-4o"))
+  assert_true(rendered.contains("Routing Patterns"))
+  assert_true(rendered.contains("gpt-5.4"))
   assert_true(rendered.contains("claude-sonnet-4-5-20250929"))
   assert_true(rendered.contains("nyxid-gateway"))
 }
@@ -511,5 +511,5 @@ test "format_llm_status handles missing fields gracefully" {
   let response = Json::object({})
   let rendered = format_llm_status(response)
   assert_true(rendered.contains("Connected Providers"))
-  assert_true(rendered.contains("Supported Models"))
+  assert_true(rendered.contains("Routing Patterns"))
 }

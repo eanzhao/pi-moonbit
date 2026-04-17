@@ -99,25 +99,22 @@ pub fn run_setup_command(config : SetupConfig, runtime : CliHostRuntime) -> Int 
     status
   }
 
-  // Step 4: pick a default model from supported_models
-  let models = after_connect_status.supported_models
-  if models.length() == 0 {
+  // Step 4: pick a default model — reuse the two-level provider→model picker
+  // so the user sees real model ids rather than routing wildcards.
+  let connected_now = collect_ready_providers(after_connect_status.providers)
+  let chosen : String? = if connected_now.length() == 0 {
     write_out(@tui.ansi_info("No models available yet — add a provider and re-run `pimbt setup`.") + "\n")
-    return 0
-  }
-  write_out(@tui.ansi_section_header("Pick a default model") + "\n")
-  let visible = if models.length() > 20 { 20 } else { models.length() }
-  for i = 0; i < visible; i = i + 1 {
-    write_out("  " + (i + 1).to_string() + ". " + models[i] + "\n")
-  }
-  if models.length() > visible {
-    write_out("  " + @tui.ansi_dim() + "... " + (models.length() - visible).to_string() + " more (run `pimbt models` for the full list)" + @tui.ansi_reset() + "\n")
-  }
-  write_out("\n")
-
-  let chosen = match prompt_choice(runtime, "Default model [1-" + visible.to_string() + ", or Enter to skip]: ", visible) {
-    Some(i) => Some(models[i - 1])
-    None => None
+    None
+  } else {
+    let picked_provider = if connected_now.length() == 1 {
+      Some(connected_now[0])
+    } else {
+      pick_connected_provider(runtime, connected_now)
+    }
+    match picked_provider {
+      None => None
+      Some(p) => pick_model_for_provider(runtime, bearer, p)
+    }
   }
 
   // Step 5: persist preferences
@@ -208,13 +205,20 @@ fn connect_provider(base_url : String, bearer : String, slug : String, api_key :
 
 ///| 交互式选模型 — 当用户跑 `pimbt --api nyxid-gateway` 但没传 `--model` 时调用。
 ///
+/// 两层流程：
+/// 1. 列出已连接的 provider（来自 `/api/v1/llm/status`），用户选一个。
+/// 2. 调 `{proxy_url}/models` 拉取该 provider 的真实 model id，用户再选一个。
+///
+/// 当只有一个 provider 时跳过第 1 步；列表太长时用方向键导航。
 /// 返回选中的 model id；如果用户取消或没有可用模型，返回 None。
 pub fn pick_model_interactive(
   runtime : CliHostRuntime,
   base_url : String,
   credentials_path : String
 ) -> String? {
-  let (base, bearer) = match resolve_nyxid_bearer(base_url, None, credentials_path, runtime) {
+  let (base, bearer) = match resolve_nyxid_bearer(
+    base_url, None, credentials_path, runtime,
+  ) {
     Ok(r) => r
     Err(_) => return None
   }
@@ -222,22 +226,83 @@ pub fn pick_model_interactive(
     Ok(s) => s
     Err(_) => return None
   }
-  let models = status.supported_models
-  if models.length() == 0 {
-    (runtime.stdout_write)(@tui.ansi_info("No models available. Run `pimbt setup` to connect a provider.") + "\n")
+  let connected = collect_ready_providers(status.providers)
+  if connected.length() == 0 {
+    (runtime.stdout_write)(
+      @tui.ansi_info(
+        "No LLM providers connected. Run `pimbt providers connect <slug>` first.",
+      ) + "\n",
+    )
     return None
   }
-  let write_out = runtime.stdout_write
-  write_out(@tui.ansi_section_header("Pick a model") + "\n")
-  let visible = if models.length() > 15 { 15 } else { models.length() }
-  for i = 0; i < visible; i = i + 1 {
-    write_out("  " + (i + 1).to_string() + ". " + models[i] + "\n")
+  let provider = match connected.length() {
+    1 => connected[0]
+    _ =>
+      match pick_connected_provider(runtime, connected) {
+        Some(p) => p
+        None => return None
+      }
   }
-  if models.length() > visible {
-    write_out("  " + @tui.ansi_dim() + "... " + (models.length() - visible).to_string() + " more" + @tui.ansi_reset() + "\n")
+  pick_model_for_provider(runtime, bearer, provider)
+}
+
+///| 显示已连接 provider 列表，让用户选一个。
+fn pick_connected_provider(
+  runtime : CliHostRuntime,
+  connected : Array[@ai.LlmProviderStatus]
+) -> @ai.LlmProviderStatus? {
+  let labels : Array[String] = []
+  for p in connected {
+    let display = if p.provider_name == p.provider_slug {
+      p.provider_slug
+    } else {
+      p.provider_name + "  (" + p.provider_slug + ")"
+    }
+    labels.push(display)
   }
-  match prompt_choice(runtime, "\nChoice [1-" + visible.to_string() + "]: ", visible) {
-    Some(i) => Some(models[i - 1])
-    None => None
+  let title = @tui.ansi_section_header("Pick a provider")
+  let idx = host_select_from_list(title, labels, 0)
+  if idx < 0 || idx >= connected.length() {
+    (runtime.stderr_write)(@tui.ansi_info("Cancelled.") + "\n")
+    None
+  } else {
+    Some(connected[idx])
+  }
+}
+
+///| 为指定 provider 拉真实 model 列表并让用户挑一个。失败或取消返回 None。
+fn pick_model_for_provider(
+  runtime : CliHostRuntime,
+  bearer : String,
+  provider : @ai.LlmProviderStatus
+) -> String? {
+  let models = fetch_provider_models(
+    provider.proxy_url, bearer, provider.provider_slug,
+  )
+  if models.length() == 0 {
+    (runtime.stdout_write)(
+      @tui.ansi_info(
+        "No models discovered for " + provider.provider_slug +
+        ". Enter a model id manually (or press Enter to skip):",
+      ) + "\n",
+    )
+    match (runtime.read_line)("model> ") {
+      Some(line) => {
+        let trimmed = line.trim().to_string()
+        if trimmed.length() == 0 { None } else { Some(trimmed) }
+      }
+      None => None
+    }
+  } else {
+    let title = @tui.ansi_section_header(
+      "Pick a model (" + provider.provider_slug + ")",
+    )
+    let idx = host_select_from_list(title, models, 0)
+    if idx < 0 || idx >= models.length() {
+      (runtime.stderr_write)(@tui.ansi_info("Cancelled.") + "\n")
+      None
+    } else {
+      Some(models[idx])
+    }
   }
 }

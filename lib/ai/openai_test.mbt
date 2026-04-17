@@ -1,6 +1,6 @@
 fn openai_test_model() -> Model {
   {
-    id: "gpt-4o-mini",
+    id: "gpt-5.4-mini",
     name: "GPT-4o Mini",
     api: api_openai_completions,
     provider: provider_openai,
@@ -37,7 +37,7 @@ fn openai_test_assistant_message(content : Array[ContentBlock], stop_reason? : S
     content,
     api: api_openai_completions,
     provider: provider_openai,
-    model: "gpt-4o-mini",
+    model: "gpt-5.4-mini",
     usage: Usage::zero(),
     stop_reason,
     error_message: None,
@@ -74,7 +74,7 @@ test "build request body from simple context" {
     fail("expected OpenAI request body object")
   }
 
-  assert_eq(model_id, "gpt-4o-mini")
+  assert_eq(model_id, "gpt-5.4-mini")
   assert_eq(max_tokens.to_int(), 128)
   assert_eq(temperature, 0.2)
   assert_eq(messages.length(), 2)

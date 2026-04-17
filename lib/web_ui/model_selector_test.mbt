@@ -21,7 +21,7 @@ test "filter selectable models applies current model capability and search filte
     max_tokens: 8192,
   }
   let gpt : @ai.Model = {
-    id: "gpt-4o-mini",
+    id: "gpt-5.4-mini",
     name: "GPT-4o mini",
     api: @ai.api_openai_responses,
     provider: @ai.ProviderId("openai"),

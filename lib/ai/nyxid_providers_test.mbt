@@ -16,7 +16,7 @@ test "parse_nyxid_llm_status extracts providers and models" {
     ]),
     "gateway_url": Json::string("https://nyx.example.com/api/v1/llm/gateway"),
     "supported_models": Json::array([
-      Json::string("gpt-4o"),
+      Json::string("gpt-5.4"),
       Json::string("claude-sonnet-4-5"),
     ]),
   })
@@ -28,7 +28,7 @@ test "parse_nyxid_llm_status extracts providers and models" {
       assert_eq(status.providers[1].provider_slug, "anthropic")
       assert_eq(status.gateway_url, "https://nyx.example.com/api/v1/llm/gateway")
       assert_eq(status.supported_models.length(), 2)
-      assert_eq(status.supported_models[0], "gpt-4o")
+      assert_eq(status.supported_models[0], "gpt-5.4")
     }
     Err(msg) => fail(msg)
   }

@@ -304,6 +304,29 @@ fn host_exit_process(code : Int) -> Unit {
   host_native_exit_ffi(code)
 }
 
+///| Native fallback: numbered prompt via stdout/getchar. No arrow-key support.
+fn host_select_from_list(title : String, items : Array[String], initial : Int) -> Int {
+  let _ = initial
+  if items.length() == 0 { return -1 }
+  if title.length() > 0 { host_stdout_write(title + "\n") }
+  for i in 0..<items.length() {
+    host_stdout_write("  " + (i + 1).to_string() + ". " + items[i] + "\n")
+  }
+  host_native_write_text_fd(1, "Choice [1-" + items.length().to_string() + "]: ")
+  match host_read_line("") {
+    None => -1
+    Some(line) => {
+      let trimmed = line.trim().to_string()
+      if trimmed.length() == 0 { return -1 }
+      let parsed : Result[Int, Error] = try? @string.parse_int(trimmed)
+      match parsed {
+        Ok(n) if n >= 1 && n <= items.length() => n - 1
+        _ => -1
+      }
+    }
+  }
+}
+
 fn write_console_line(text : String) -> Unit {
   match text.strip_suffix("\n") {
     Some(view) => println(view.to_string())

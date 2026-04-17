@@ -23,11 +23,33 @@ extern "js" fn host_wait_cli_callback_ffi(
   #|      const expectedState = ${JSON.stringify(expectedState)};
   #|      const timeoutMs = ${timeoutMs};
   #|      let finished = false;
+  #|      const finish = (result) => {
+  #|        if (finished) return;
+  #|        finished = true;
+  #|        process.stdout.write(JSON.stringify(result), () => {
+  #|          try { server.close(); } catch {}
+  #|          // HTTP keep-alive may hold the socket open; force exit shortly after
+  #|          // the response has been flushed so execSync's parent returns.
+  #|          setTimeout(() => process.exit(0), 50);
+  #|        });
+  #|      };
+  #|      const respond = (statusCode, html, result) => {
+  #|        try {
+  #|          res.writeHead(statusCode, {
+  #|            "Content-Type": "text/html; charset=utf-8",
+  #|            "Connection": "close",
+  #|          });
+  #|          res.end(html, () => finish(result));
+  #|        } catch {
+  #|          finish(result);
+  #|        }
+  #|      };
   #|      const server = http.createServer((req, res) => {
   #|        // CORS for browser-side fetch from frontend to localhost
   #|        res.setHeader("Access-Control-Allow-Origin", "*");
   #|        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   #|        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  #|        res.setHeader("Connection", "close");
   #|        if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
   #|        const parsed = url.parse(req.url, true);
   #|        if (parsed.pathname === "/callback") {
@@ -36,32 +58,23 @@ extern "js" fn host_wait_cli_callback_ffi(
   #|          const state = parsed.query.state;
   #|          const error = parsed.query.error;
   #|          const errorDesc = parsed.query.error_description;
-  #|          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   #|          if (error) {
-  #|            res.end("<!DOCTYPE html><html><head><title>Login failed</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>Login failed</h1><p>" + (errorDesc || error) + "</p></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", errorDesc || error])); server.close(); }
+  #|            respond(200, "<!DOCTYPE html><html><head><title>Login failed</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>Login failed</h1><p>" + (errorDesc || error) + "</p></body></html>", ["err", errorDesc || error]);
   #|          } else if (!accessToken) {
-  #|            res.end("<!DOCTYPE html><html><body><h1>Missing access_token</h1></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", "callback missing access_token"])); server.close(); }
+  #|            respond(400, "<!DOCTYPE html><html><body><h1>Missing access_token</h1></body></html>", ["err", "callback missing access_token"]);
   #|          } else if (state !== expectedState) {
-  #|            res.end("<!DOCTYPE html><html><body><h1>State mismatch</h1></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", "state mismatch"])); server.close(); }
+  #|            respond(400, "<!DOCTYPE html><html><body><h1>State mismatch</h1></body></html>", ["err", "state mismatch"]);
   #|          } else {
-  #|            res.end("<!DOCTYPE html><html><head><title>Login successful</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>Login successful</h1><p>You may close this window and return to the terminal.</p></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["ok", accessToken, refreshToken, state])); server.close(); }
+  #|            respond(200, "<!DOCTYPE html><html><head><title>Login successful</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>Login successful</h1><p>You may close this window and return to the terminal.</p></body></html>", ["ok", accessToken, refreshToken, state]);
   #|          }
   #|        } else {
   #|          res.writeHead(404);
   #|          res.end();
   #|        }
   #|      });
-  #|      server.on("error", (e) => {
-  #|        if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", e.message])); }
-  #|      });
+  #|      server.on("error", (e) => finish(["err", e.message]));
   #|      server.listen(port, "127.0.0.1");
-  #|      setTimeout(() => {
-  #|        if (!finished) { finished = true; process.stdout.write(JSON.stringify(["timeout"])); server.close(); }
-  #|      }, timeoutMs);
+  #|      setTimeout(() => finish(["timeout"]), timeoutMs);
   #|    `);
   #|    const out = execSync("node " + JSON.stringify(tmp), {
   #|      maxBuffer: 10 * 1024 * 1024,
@@ -119,39 +132,50 @@ extern "js" fn host_wait_oauth_callback_ffi(
   #|      const expectedState = ${JSON.stringify(expectedState)};
   #|      const timeoutMs = ${timeoutMs};
   #|      let finished = false;
+  #|      const finish = (result) => {
+  #|        if (finished) return;
+  #|        finished = true;
+  #|        process.stdout.write(JSON.stringify(result), () => {
+  #|          try { server.close(); } catch {}
+  #|          setTimeout(() => process.exit(0), 50);
+  #|        });
+  #|      };
+  #|      const respond = (statusCode, html, result) => {
+  #|        try {
+  #|          res.writeHead(statusCode, {
+  #|            "Content-Type": "text/html; charset=utf-8",
+  #|            "Connection": "close",
+  #|          });
+  #|          res.end(html, () => finish(result));
+  #|        } catch {
+  #|          finish(result);
+  #|        }
+  #|      };
   #|      const server = http.createServer((req, res) => {
+  #|        res.setHeader("Connection", "close");
   #|        const parsed = url.parse(req.url, true);
   #|        if (parsed.pathname === "/callback") {
   #|          const code = parsed.query.code;
   #|          const state = parsed.query.state;
   #|          const error = parsed.query.error;
   #|          const errorDesc = parsed.query.error_description;
-  #|          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   #|          if (error) {
-  #|            res.end("<!DOCTYPE html><html><head><title>Login failed</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>❌ Login failed</h1><p>" + (errorDesc || error) + "</p><p>You may close this window.</p></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", errorDesc || error])); server.close(); }
+  #|            respond(200, "<!DOCTYPE html><html><head><title>Login failed</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>❌ Login failed</h1><p>" + (errorDesc || error) + "</p><p>You may close this window.</p></body></html>", ["err", errorDesc || error]);
   #|          } else if (!code) {
-  #|            res.end("<!DOCTYPE html><html><body><h1>❌ Missing code</h1></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", "callback missing code"])); server.close(); }
+  #|            respond(400, "<!DOCTYPE html><html><body><h1>❌ Missing code</h1></body></html>", ["err", "callback missing code"]);
   #|          } else if (state !== expectedState) {
-  #|            res.end("<!DOCTYPE html><html><body><h1>❌ State mismatch</h1><p>Possible CSRF attack. Aborting.</p></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", "state mismatch"])); server.close(); }
+  #|            respond(400, "<!DOCTYPE html><html><body><h1>❌ State mismatch</h1><p>Possible CSRF attack. Aborting.</p></body></html>", ["err", "state mismatch"]);
   #|          } else {
-  #|            res.end("<!DOCTYPE html><html><head><title>Login successful</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>✅ Login successful</h1><p>You may close this window and return to the terminal.</p></body></html>");
-  #|            if (!finished) { finished = true; process.stdout.write(JSON.stringify(["ok", code, state])); server.close(); }
+  #|            respond(200, "<!DOCTYPE html><html><head><title>Login successful</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#333}</style></head><body><h1>✅ Login successful</h1><p>You may close this window and return to the terminal.</p></body></html>", ["ok", code, state]);
   #|          }
   #|        } else {
   #|          res.writeHead(404);
   #|          res.end();
   #|        }
   #|      });
-  #|      server.on("error", (e) => {
-  #|        if (!finished) { finished = true; process.stdout.write(JSON.stringify(["err", e.message])); }
-  #|      });
+  #|      server.on("error", (e) => finish(["err", e.message]));
   #|      server.listen(port, "localhost");
-  #|      setTimeout(() => {
-  #|        if (!finished) { finished = true; process.stdout.write(JSON.stringify(["timeout"])); server.close(); }
-  #|      }, timeoutMs);
+  #|      setTimeout(() => finish(["timeout"]), timeoutMs);
   #|    `);
   #|    const out = execSync("node " + JSON.stringify(tmp), {
   #|      maxBuffer: 10 * 1024 * 1024,

@@ -36,9 +36,9 @@ test "render_tool_result uses success/error icons" {
 
 test "render_session_panel shows all fields" {
   let theme = dark_theme()
-  let rendered = render_session_panel(theme, "/tmp/s.jsonl", "gpt-4o", "high", 42)
+  let rendered = render_session_panel(theme, "/tmp/s.jsonl", "gpt-5.4", "high", 42)
   assert_true(rendered.contains("/tmp/s.jsonl"))
-  assert_true(rendered.contains("gpt-4o"))
+  assert_true(rendered.contains("gpt-5.4"))
   assert_true(rendered.contains("high"))
   assert_true(rendered.contains("42"))
 }
@@ -46,11 +46,11 @@ test "render_session_panel shows all fields" {
 test "render_model_list marks current model" {
   let theme = dark_theme()
   let models : Array[ModelEntry] = [
-    { id: "gpt-4o", provider: "openai", description: None },
+    { id: "gpt-5.4", provider: "openai", description: None },
     { id: "claude-sonnet", provider: "anthropic", description: None },
   ]
-  let rendered = render_model_list(theme, "gpt-4o", models)
-  assert_true(rendered.contains("gpt-4o"))
+  let rendered = render_model_list(theme, "gpt-5.4", models)
+  assert_true(rendered.contains("gpt-5.4"))
   assert_true(rendered.contains("claude-sonnet"))
   assert_true(rendered.contains("→"))
 }
@@ -66,7 +66,7 @@ test "render_thinking_selector lists all levels" {
 
 test "render_welcome_banner mentions pimbt" {
   let theme = dark_theme()
-  let banner = render_welcome_banner(theme, "gpt-4o", "off")
+  let banner = render_welcome_banner(theme, "gpt-5.4", "off")
   assert_true(banner.contains("pimbt"))
-  assert_true(banner.contains("gpt-4o"))
+  assert_true(banner.contains("gpt-5.4"))
 }

@@ -43,6 +43,10 @@ fn host_exit_process(code : Int) -> Unit {
   host_wasm_exit(code)
 }
 
+fn host_select_from_list(_title : String, _items : Array[String], _initial : Int) -> Int {
+  -1
+}
+
 fn write_console_line(text : String) -> Unit {
   match text.strip_suffix("\n") {
     Some(view) => println(view.to_string())
