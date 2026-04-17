@@ -27,7 +27,7 @@ pub fn build_anthropic_auth_url(
     "redirect_uri=" + url_encode(redirect_uri),
     "scope=" + url_encode(anthropic_oauth_scopes),
     "code_challenge=" + pkce.challenge,
-    "code_challenge_method=" + pkce.method,
+    "code_challenge_method=" + pkce.challenge_method,
     "state=" + state,
   ]
   anthropic_oauth_auth_url + "?" + params.join("&")

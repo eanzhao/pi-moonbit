@@ -106,37 +106,6 @@ fn run_print_mode(app : CliApp, messages : Array[String]) -> Int {
   exit_code
 }
 
-fn run_interactive_mode(app : CliApp, messages : Array[String]) -> Int {
-  (app.runtime.stdout_write)("Interactive mode. Type :help for commands.\n")
-
-  let mut exit_code = 0
-  for message in messages {
-    let code = run_prompt(app, message, "assistant> ")
-    if code != 0 {
-      exit_code = code
-    }
-  }
-
-  while true {
-    match (app.runtime.read_line)("pi> ") {
-      None => return exit_code
-      Some(line) =>
-        match handle_repl_command(app, line) {
-          Continue => ()
-          Exit(code) => return if code != 0 { code } else { exit_code }
-          Prompt(prompt) => {
-            let code = run_prompt(app, prompt, "assistant> ")
-            if code != 0 {
-              exit_code = code
-            }
-          }
-        }
-    }
-  }
-
-  exit_code
-}
-
 fn run_prompt(app : CliApp, prompt : String, assistant_prefix : String) -> Int {
   if prompt == "" {
     return 0
@@ -171,81 +140,6 @@ fn run_prompt(app : CliApp, prompt : String, assistant_prefix : String) -> Int {
       }
     }
   }
-}
-
-fn handle_repl_command(app : CliApp, line : String) -> ReplCommandResult {
-  if line == "" {
-    return Continue
-  }
-  if !line.has_prefix(":") {
-    return Prompt(line)
-  }
-  if line == ":quit" || line == ":exit" {
-    return Exit(0)
-  }
-  if line == ":help" {
-    (app.runtime.stdout_write)([
-      "Commands:",
-      "  :help",
-      "  :session",
-      "  :model <id>",
-      "  :thinking <level>",
-      "  :quit",
-    ].join("\n") + "\n")
-    return Continue
-  }
-  if line == ":session" {
-    let path = match app.session_path {
-      Some(path) => path
-      None => "(ephemeral)"
-    }
-    (app.runtime.stdout_write)(
-      "session: " + path +
-      "\nmodel: " + app.session.agent.state.model.id +
-      "\nthinking: " + thinking_level_name(app.session.agent.state.thinking_level) +
-      "\nentries: " + app.session.session_manager.get_entries().length().to_string() +
-      "\n",
-    )
-    return Continue
-  }
-  if line.has_prefix(":model ") {
-    let next_id = line[7:].to_string()
-    if next_id.length() == 0 {
-      (app.runtime.stderr_write)("missing model id\n")
-      return Continue
-    }
-    let current = app.session.agent.state.model
-    let next_model : @ai.Model = {
-      id: next_id,
-      name: next_id,
-      api: current.api,
-      provider: current.provider,
-      base_url: current.base_url,
-      reasoning: current.reasoning,
-      input_modalities: current.input_modalities.copy(),
-      cost: current.cost,
-      context_window: current.context_window,
-      max_tokens: current.max_tokens,
-    }
-    ignore(app.session.set_model(next_model))
-    ignore(persist_session(app))
-    (app.runtime.stdout_write)("model switched to " + next_id + "\n")
-    return Continue
-  }
-  if line.has_prefix(":thinking ") {
-    let raw_level = line[10:].to_string()
-    match parse_thinking_level(raw_level) {
-      Some(level) => {
-        ignore(app.session.set_thinking_level(level))
-        ignore(persist_session(app))
-        (app.runtime.stdout_write)("thinking switched to " + raw_level + "\n")
-      }
-      None => (app.runtime.stderr_write)("unknown thinking level: " + raw_level + "\n")
-    }
-    return Continue
-  }
-  (app.runtime.stderr_write)("unknown command: " + line + "\n")
-  Continue
 }
 
 fn resolve_cli_session(

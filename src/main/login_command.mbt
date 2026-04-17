@@ -27,7 +27,7 @@ pub fn LoginConfig::defaults(cwd : String) -> LoginConfig {
     client_id: "",
     client_secret: None,
     redirect_port: 54545,
-    scope: @ai.nyxid_default_scope,
+    scope: "",  // empty = use client's allowed_scopes on server side
     credentials_path: credentials_default_path(cwd),
     timeout_seconds: 300,
   }
@@ -43,7 +43,12 @@ pub fn credentials_default_path(cwd : String) -> String {
   }
 }
 
-///| 运行 NyxID OAuth 登录流程。
+///| 运行 NyxID 登录流程（简化 CLI 流程，不需要 client_id）。
+///
+/// 1. GET /api/v1/public/config 发现 frontend URL
+/// 2. 打开浏览器到 {frontend}/cli-auth?port=X&state=Y
+/// 3. 等 frontend 通过浏览器端 fetch 回推 tokens 到 localhost:X/callback
+/// 4. 保存 tokens 到 ~/.pimbt/nyxid-credentials.json
 pub fn run_nyxid_login(
   config : LoginConfig,
   runtime : CliHostRuntime
@@ -51,8 +56,107 @@ pub fn run_nyxid_login(
   let write_out = runtime.stdout_write
   let write_err = runtime.stderr_write
 
+  // Step 1: discover frontend URL
+  let config_url = trim_trail_slash(config.base_url) + @ai.nyxid_public_config_path
+  let (status, body) = match host_get(config_url) {
+    Ok(result) => result
+    Err(msg) => {
+      write_err(@tui.ansi_error("Failed to reach NyxID at " + config.base_url + ": " + msg) + "\n")
+      return 3
+    }
+  }
+  if status >= 400 {
+    write_err(@tui.ansi_error("NyxID returned HTTP " + status.to_string() + ": " + body) + "\n")
+    return 3
+  }
+  let config_json = try { @json.parse(body) } catch {
+    _ => {
+      write_err(@tui.ansi_error("Failed to parse public config: " + body) + "\n")
+      return 3
+    }
+  }
+  let frontend_url = match @ai.parse_nyxid_public_config(config_json) {
+    Ok(url) => url
+    Err(msg) => {
+      write_err(@tui.ansi_error(msg) + "\n")
+      return 3
+    }
+  }
+
+  // Step 2: open browser to /cli-auth
+  let state = host_random_state()
+  let auth_url = @ai.build_nyxid_cli_auth_url(
+    frontend_url,
+    config.redirect_port,
+    state,
+    client_ua="pimbt",
+  )
+
+  write_out(
+    @tui.ansi_bold() + "Opening browser for NyxID login..." + @tui.ansi_reset() + "\n" +
+    @tui.ansi_info("If the browser does not open, visit:") + "\n" +
+    "  " + auth_url + "\n\n" +
+    @tui.ansi_info("Waiting for callback on http://127.0.0.1:" + config.redirect_port.to_string() + "/callback (timeout " + config.timeout_seconds.to_string() + "s)...") + "\n",
+  )
+  host_open_browser(auth_url)
+
+  // Step 3: wait for tokens
+  let (access_token, refresh_token_opt, returned_state) = match host_wait_cli_callback(
+    config.redirect_port,
+    state,
+    config.timeout_seconds * 1000,
+  ) {
+    Ok(result) => result
+    Err(msg) => {
+      write_err(@tui.ansi_error("Login failed: " + msg) + "\n")
+      return 4
+    }
+  }
+  if returned_state != state {
+    write_err(@tui.ansi_error("State mismatch (possible CSRF); aborting.") + "\n")
+    return 5
+  }
+
+  // Step 4: build credentials + persist
+  let now = now_epoch_seconds(runtime)
+  let creds = @ai.nyxid_cli_credentials_from_callback(
+    access_token,
+    refresh_token_opt,
+    now,
+  )
+
+  let creds_json = @ai.nyxid_credentials_to_json(creds, config.base_url, "")
+  let creds_text = creds_json.stringify(escape_slash=false)
+  match (runtime.write_text)(config.credentials_path, creds_text) {
+    Ok(_) => ()
+    Err(msg) => {
+      write_err(@tui.ansi_error("Failed to save credentials to " + config.credentials_path + ": " + msg) + "\n")
+      return 6
+    }
+  }
+
+  write_out(
+    @tui.ansi_bold() + @tui.ansi_green() + "✓ Login successful!" + @tui.ansi_reset() + "\n" +
+    @tui.ansi_info("Credentials saved to " + config.credentials_path) + "\n" +
+    @tui.ansi_info("Next: configure LLM providers on the dashboard, then run:") + "\n" +
+    @tui.ansi_info("  pimbt --api nyxid-gateway --model <model> \"your prompt\"") + "\n",
+  )
+
+  0
+}
+
+///| 兼容保留：标准 OAuth 2.0 + PKCE 登录流程（需要 client_id）。
+///
+/// 在 pimbt 中一般不用这个，保留给需要自定义 OAuth 客户端的场景。
+pub fn run_nyxid_oauth_login(
+  config : LoginConfig,
+  runtime : CliHostRuntime
+) -> Int {
+  let write_out = runtime.stdout_write
+  let write_err = runtime.stderr_write
+
   if config.client_id == "" {
-    write_err(@tui.ansi_error("client_id is required. Pass --client-id <id> or set NYXID_CLIENT_ID env var.") + "\n")
+    write_err(@tui.ansi_error("client_id is required for OAuth flow. Pass --client-id <id> or set NYXID_CLIENT_ID env var.") + "\n")
     return 2
   }
 
@@ -249,9 +353,10 @@ fn parse_iso_to_epoch(iso : String) -> Int64 {
 }
 
 fn parse_int_or(s : String, default : Int) -> Int {
-  match (try? @string.parse_int(s)) {
-    Ok(n) => n
-    Err(_) => default
+  try @string.parse_int(s) catch {
+    _ => default
+  } noraise {
+    n => n
   }
 }
 

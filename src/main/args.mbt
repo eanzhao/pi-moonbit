@@ -2,9 +2,17 @@ pub fn parse_cli_args(
   argv : Array[String],
   cwd? : String = "."
 ) -> Result[CliParseResult, String] {
-  // Check for `login` subcommand first
+  // Normalise argv so argv[0] is the "pimbt" program name regardless of host.
+  // JS target's @env.args() returns [node, script.js, ...user_args]; the native
+  // and test call sites pass [pimbt, ...user_args] directly. Strip the node /
+  // script-path preamble so subcommand dispatch works in both shapes.
+  let argv = normalise_argv(argv)
+  // Check for subcommands first
   if argv.length() >= 2 && argv[1] == "login" {
     return parse_login_args(argv, cwd)
+  }
+  if argv.length() >= 2 && argv[1] == "models" {
+    return parse_models_args(argv, cwd)
   }
   let mut mode = CliMode::Interactive
   let mut system_prompt = default_system_prompt()
@@ -157,6 +165,7 @@ pub fn cli_help_text() -> String {
     "Usage:",
     "  pimbt [options] [messages...]",
     "  pimbt login --client-id <id>   # OAuth login (NyxID)",
+    "  pimbt models                   # list providers + models on your NyxID account",
     "",
     "Options:",
     "  -h, --help                 Show this help",
@@ -283,9 +292,10 @@ fn parse_login_args(argv : Array[String], cwd : String) -> Result[CliParseResult
     } else if arg == "--port" {
       guard i + 1 < argv.length() else { return Err("missing value for --port") }
       i = i + 1
-      match (try? @string.parse_int(argv[i])) {
-        Ok(port) => config = { ..config, redirect_port: port }
-        Err(_) => return Err("invalid port: " + argv[i])
+      try @string.parse_int(argv[i]) catch {
+        _ => return Err("invalid port: " + argv[i])
+      } noraise {
+        port => config = { ..config, redirect_port: port }
       }
     } else if arg == "--credentials-path" {
       guard i + 1 < argv.length() else { return Err("missing value for --credentials-path") }
@@ -300,26 +310,114 @@ fn parse_login_args(argv : Array[String], cwd : String) -> Result[CliParseResult
   if config.provider != "nyxid" {
     return Err("only --provider nyxid is supported right now")
   }
-  if config.client_id == "" {
-    return Err("missing --client-id (or set NYXID_CLIENT_ID env var)")
-  }
+  // client_id optional: if set, use standard OAuth 2.0 + PKCE flow;
+  // otherwise use the simpler CLI flow (/cli-auth).
   Ok(CliParseResult::Login(config))
+}
+
+///| 如果 argv 前缀看起来是 `[node, /path/to/main.js, ...]`（JS target 下
+/// `@env.args()` 的形状），丢掉这两个 entry，使后续 argv[0] 回到 "pimbt"。
+/// 其它情况（测试用 ["pimbt", ...]、native binary 等）保持原样。
+fn normalise_argv(argv : Array[String]) -> Array[String] {
+  if argv.length() < 2 { return argv }
+  let first = argv[0]
+  let second = argv[1]
+  let looks_like_node = first == "node" || first.has_suffix("/node") || first.has_suffix("/node.exe")
+  let looks_like_js_script = second.has_suffix(".js") || second.has_suffix(".mjs") || second.has_suffix(".cjs")
+  if looks_like_node && looks_like_js_script {
+    let rest : Array[String] = ["pimbt"]
+    for i in 2..<argv.length() {
+      rest.push(argv[i])
+    }
+    return rest
+  }
+  argv
+}
+
+///| 解析 `pimbt models` 子命令。
+fn parse_models_args(argv : Array[String], cwd : String) -> Result[CliParseResult, String] {
+  let mut base_url = host_env_var("NYXID_BASE_URL").unwrap_or(@ai.nyxid_default_base_url)
+  let mut creds_path = credentials_default_path(cwd)
+  let mut bearer_override : String? = None
+
+  let mut i = 2
+  while i < argv.length() {
+    let arg = argv[i]
+    if arg == "--help" || arg == "-h" {
+      return Ok(CliParseResult::Help(models_help_text()))
+    } else if arg == "--base-url" {
+      guard i + 1 < argv.length() else { return Err("missing value for --base-url") }
+      i = i + 1
+      base_url = argv[i]
+    } else if arg == "--credentials-path" {
+      guard i + 1 < argv.length() else { return Err("missing value for --credentials-path") }
+      i = i + 1
+      creds_path = argv[i]
+    } else if arg == "--bearer" {
+      guard i + 1 < argv.length() else { return Err("missing value for --bearer") }
+      i = i + 1
+      bearer_override = Some(argv[i])
+    } else if arg.has_prefix("-") {
+      return Err("unknown models option: " + arg)
+    }
+    i = i + 1
+  }
+  Ok(CliParseResult::Models({
+    base_url,
+    credentials_path: creds_path,
+    bearer_override,
+  }))
+}
+
+pub fn models_help_text() -> String {
+  [
+    "pimbt models - list LLM providers and models available on your NyxID account",
+    "",
+    "Calls GET {base_url}/api/v1/llm/status with your stored NyxID access token",
+    "and prints: connected providers (ready/expired/not_connected) + supported",
+    "model IDs you can pass to `--model`.",
+    "",
+    "Usage:",
+    "  pimbt models [options]",
+    "",
+    "Options:",
+    "  --base-url <url>           NyxID base URL (default: https://nyx.chrono-ai.fun)",
+    "  --credentials-path <path>  Credentials file (default: ~/.pimbt/nyxid-credentials.json)",
+    "  --bearer <token>           Skip credentials file and use this Bearer token directly",
+    "",
+    "If you haven't logged in yet, run `pimbt login --client-id <your-client-id>` first.",
+  ].join("\n")
 }
 
 pub fn login_help_text() -> String {
   [
-    "pimbt login - authenticate with NyxID (or other OAuth providers)",
+    "pimbt login - authenticate with NyxID",
+    "",
+    "NyxID (https://nyx.chrono-ai.fun) is a credential-brokering LLM gateway.",
+    "Configure your LLM API keys once in NyxID's web panel; pimbt never touches them.",
+    "",
+    "Default flow (no client_id needed):",
+    "  1. pimbt opens https://nyx.chrono-ai.fun/cli-auth in your browser",
+    "  2. You log in (or register with an invite code)",
+    "  3. NyxID sends tokens back to pimbt automatically",
+    "",
+    "If you prefer standard OAuth 2.0 + PKCE, pass --client-id <id> to use a",
+    "pre-registered OAuth application instead.",
     "",
     "Usage:",
-    "  pimbt login --client-id <id> [options]",
+    "  pimbt login                     # simplified flow, recommended",
+    "  pimbt login --base-url <url>    # use a self-hosted NyxID",
+    "  pimbt login --client-id <id>    # standard OAuth 2.0 + PKCE flow",
     "",
     "Options:",
     "  --provider <id>            OAuth provider (default: nyxid)",
     "  --client-id <id>           OAuth client id (required; or NYXID_CLIENT_ID env)",
     "  --client-secret <secret>   OAuth client secret (optional; confidential clients)",
     "  --base-url <url>           Provider base URL (default: https://nyx.chrono-ai.fun)",
-    "  --scope <scope>            OAuth scope (default: openid profile email)",
+    "  --scope <scope>            OAuth scope (default: empty, uses client's allowed_scopes)",
     "  --port <port>              Local callback port (default: 54545)",
     "  --credentials-path <path>  Where to save credentials (default: ~/.pimbt/nyxid-credentials.json)",
+    "",
+    "After login, run `pimbt models` to see which providers and models are available.",
   ].join("\n")
 }

@@ -40,16 +40,48 @@ moon run src/main --target js -- --help
 
 ## NyxID 集成（推荐用法）
 
-[NyxID](https://nyx.chrono-ai.fun) 是凭证代理：用户在 NyxID 面板存 LLM API key，pimbt 通过 NyxID 代理调用，不直接接触 key。
+[NyxID](https://nyx.chrono-ai.fun) 是一个**凭证代理 + LLM 网关**：你在 NyxID 面板上统一管理各家 LLM 的 API key（OpenAI / Anthropic / Gemini / Mistral 等），pimbt 通过 NyxID OAuth 登录后，调用 LLM 时由 NyxID 服务端根据 model id 自动路由到对应 provider 并注入凭证——pimbt 本地**不接触任何 LLM API key**。
+
+好处：
+- 一次登录，用遍所有已在 NyxID 配好的 provider
+- key 泄露风险集中在 NyxID 服务端（轮换、吊销更容易）
+- 可以多设备同步，无需到处 `export OPENAI_API_KEY=...`
+
+### 注册 NyxID 账号
+
+NyxID 目前**需要邀请码**才能注册：
+
+- 注册入口：<https://nyx.chrono-ai.fun/register>
+- 邀请码：`NYX-S6SBEA4X`（共 20 个名额，先到先得）
+
+### 在 NyxID 配置 OAuth 应用和 LLM Provider
+
+登录 NyxID 面板后，做两件事：
+
+1. **创建一个 OAuth 应用**（Public client，使用 PKCE，无需 client secret），记下 `client_id`。回调地址填 `http://localhost:54545/callback`（默认端口，可用 `--port` 改）。
+2. **在 "LLM Providers" 页添加你要用的服务商**，把对应 API key 贴进去（OpenAI、Anthropic、Gemini、Mistral 都支持）。
+
+### 用 pimbt 登录并使用
 
 ```bash
-# 一次性登录（自动打开浏览器，PKCE + OAuth 2.0）
+# 一次性登录（自动打开浏览器，OAuth 2.0 + PKCE/S256）
 pimbt login --client-id <your-nyxid-client-id>
+# 或用环境变量代替 --client-id
+export NYXID_CLIENT_ID=<your-nyxid-client-id>
+pimbt login
 
-# 之后直接用，NyxID 自动注入 key，access token 自动刷新
+# 凭证保存到 ~/.pimbt/nyxid-credentials.json
+# 之后直接用，access token 过期前 60s 会自动 refresh
+# 若 refresh_token 被 NyxID 吊销，pimbt 会清晰报错要求重新登录
+
+# 看看哪些 provider 已连接、支持哪些 model id
+pimbt models
+
 pimbt --api nyxid-gateway --model gpt-4o "write a fib function"
 pimbt --api nyxid-gateway --model claude-sonnet-4-5-20250929 "explain quicksort"
 ```
+
+`--model` 可以填任何你在 NyxID 上配过 provider 的模型 id，pimbt 这边没有写死白名单。
 
 ## 直连 Provider
 

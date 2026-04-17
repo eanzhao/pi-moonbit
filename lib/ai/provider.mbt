@@ -7,9 +7,9 @@ pub(all) suberror StreamError {
 pub(all) struct EventHandler((AssistantMessageEvent) -> Unit)
 
 ///| 已注册的供应商流式函数条目，将 API 标识映射到对应的流式处理函数。
-struct ProviderEntry {
+priv struct ProviderEntry {
   api : ApiId
-  stream_fn : (Model, Context, StreamOptions, EventHandler) -> Unit!StreamError
+  stream_fn : (Model, Context, StreamOptions, EventHandler) -> Unit raise StreamError
 }
 
 ///| 全局供应商注册表。
@@ -19,7 +19,7 @@ let providers : Array[ProviderEntry] = []
 /// 若该 API 已注册，则覆盖原有的处理函数。
 pub fn register_provider(
   api : ApiId,
-  f : (Model, Context, StreamOptions, EventHandler) -> Unit!StreamError
+  f : (Model, Context, StreamOptions, EventHandler) -> Unit raise StreamError
 ) -> Unit {
   for i = 0; i < providers.length(); i = i + 1 {
     if providers[i].api == api {
@@ -33,7 +33,7 @@ pub fn register_provider(
 ///| 根据 API 标识查找已注册的流式处理函数。
 pub fn get_provider(
   api : ApiId
-) -> ((Model, Context, StreamOptions, EventHandler) -> Unit!StreamError)? {
+) -> ((Model, Context, StreamOptions, EventHandler) -> Unit raise StreamError)? {
   for i = 0; i < providers.length(); i = i + 1 {
     if providers[i].api == api {
       return Some(providers[i].stream_fn)
@@ -54,9 +54,9 @@ pub fn stream(
   context : Context,
   options : StreamOptions,
   handler : EventHandler
-) -> Unit!StreamError {
+) -> Unit raise StreamError {
   match get_provider(model.api) {
-    Some(f) => f!(model, context, options, handler)
+    Some(f) => f(model, context, options, handler)
     None => raise StreamError("no provider registered for API: " + model.api.0)
   }
 }
@@ -67,9 +67,9 @@ pub fn complete(
   model : Model,
   context : Context,
   options : StreamOptions
-) -> AssistantMessage!StreamError {
+) -> AssistantMessage raise StreamError {
   let result : Ref[AssistantMessage?] = Ref::new(None)
-  stream!(model, context, options, fn(event) {
+  stream(model, context, options, fn(event) {
     match event {
       Done(_, msg) | Error(_, msg) => result.val = Some(msg)
       _ => ()

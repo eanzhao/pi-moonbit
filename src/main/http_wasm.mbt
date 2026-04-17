@@ -3,7 +3,7 @@ fn host_nyxid_stream(
   _context : @ai.Context,
   _options : @ai.StreamOptions,
   _handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   raise @ai.StreamError("NyxID streaming is not implemented for wasm target yet")
 }
 
@@ -12,7 +12,7 @@ fn host_anthropic_stream(
   _context : @ai.Context,
   _options : @ai.StreamOptions,
   _handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   raise @ai.StreamError("Anthropic streaming is not implemented for wasm target yet")
 }
 
@@ -21,7 +21,7 @@ fn host_openai_stream(
   _context : @ai.Context,
   _options : @ai.StreamOptions,
   _handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   raise @ai.StreamError("OpenAI streaming is not implemented for wasm target yet")
 }
 
@@ -30,7 +30,7 @@ fn host_gemini_stream(
   _context : @ai.Context,
   _options : @ai.StreamOptions,
   _handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   raise @ai.StreamError("Gemini streaming is not implemented for wasm target yet")
 }
 
@@ -39,7 +39,7 @@ fn host_mistral_stream(
   _context : @ai.Context,
   _options : @ai.StreamOptions,
   _handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   raise @ai.StreamError("Mistral streaming is not implemented for wasm target yet")
 }
 

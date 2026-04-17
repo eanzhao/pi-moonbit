@@ -17,6 +17,25 @@ test "nyxid auth url contains required OAuth params" {
   assert_true(url.contains("redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback"))
 }
 
+test "nyxid auth url omits scope when empty (lets server use allowed_scopes)" {
+  let pkce = pkce_challenge_s256("v", "c")
+  let url = build_nyxid_auth_url(
+    "https://nyx.example.com",
+    "id", "http://x", "s", pkce,
+  )
+  assert_false(url.contains("scope="))
+}
+
+test "nyxid auth url includes scope when provided" {
+  let pkce = pkce_challenge_s256("v", "c")
+  let url = build_nyxid_auth_url(
+    "https://nyx.example.com",
+    "id", "http://x", "s", pkce,
+    scope="openid profile email",
+  )
+  assert_true(url.contains("scope=openid"))
+}
+
 test "nyxid auth url trims trailing slash on base url" {
   let pkce = pkce_challenge_s256("v", "c")
   let url = build_nyxid_auth_url(
@@ -125,6 +144,50 @@ test "is_credentials_expired with 60-second buffer" {
   assert_true(now + 60L >= 1000L)
   let now2 : Int64 = 900L
   assert_false(now2 + 60L >= 1000L)
+}
+
+test "cli auth url omits client_id (not needed for CLI flow)" {
+  let url = build_nyxid_cli_auth_url("https://nyx.chrono-ai.fun", 54545, "state-abc")
+  assert_true(url.has_prefix("https://nyx.chrono-ai.fun/cli-auth?"))
+  assert_true(url.contains("port=54545"))
+  assert_true(url.contains("state=state-abc"))
+  assert_true(url.contains("client_ua=pimbt"))
+  assert_false(url.contains("client_id"))
+  assert_false(url.contains("code_challenge"))
+}
+
+test "cli auth url with custom client_ua" {
+  let url = build_nyxid_cli_auth_url("https://x.com", 1234, "s", client_ua="myapp/1.0")
+  assert_true(url.contains("client_ua=myapp%2F1.0"))
+}
+
+test "parse_nyxid_public_config extracts frontend_url" {
+  let json = Json::object({
+    "frontend_url": Json::string("https://app.nyx.example.com/"),
+    "other_field": Json::string("ignored"),
+  })
+  match parse_nyxid_public_config(json) {
+    Ok(url) => assert_eq(url, "https://app.nyx.example.com")  // trailing slash trimmed
+    Err(msg) => fail(msg)
+  }
+}
+
+test "parse_nyxid_public_config handles missing frontend_url" {
+  let json = Json::object({})
+  assert_true(parse_nyxid_public_config(json) is Err(_))
+}
+
+test "nyxid_cli_credentials_from_callback builds OAuthCredentials" {
+  let creds = nyxid_cli_credentials_from_callback("access-xyz", Some("refresh-xyz"), 1000L)
+  assert_eq(creds.access_token, "access-xyz")
+  assert_eq(creds.refresh_token, Some("refresh-xyz"))
+  assert_eq(creds.token_type, "Bearer")
+  assert_eq(creds.expires_at, Some(1900L))  // 1000 + 900 default
+}
+
+test "nyxid_cli_credentials with custom ttl" {
+  let creds = nyxid_cli_credentials_from_callback("t", None, 0L, assumed_ttl_seconds=3600)
+  assert_eq(creds.expires_at, Some(3600L))
 }
 
 test "refresh response without refresh_token preserves original" {

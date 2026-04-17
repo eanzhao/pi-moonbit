@@ -48,10 +48,6 @@ pub fn extract_completion_token(input : String, cursor : Int) -> String {
   input[start:effective_cursor].to_string()
 }
 
-fn is_token_boundary(ch : Char) -> Bool {
-  ch == ' ' || ch == '\t' || ch == '\n' || ch == '/' || ch == '\\'
-}
-
 fn is_token_boundary_code(code : UInt16) -> Bool {
   code == 32 || code == 9 || code == 10 || code == 47 || code == 92  // space tab lf / \
 }

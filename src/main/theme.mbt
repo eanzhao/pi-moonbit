@@ -27,20 +27,20 @@ pub(all) struct Theme {
 pub fn dark_theme() -> Theme {
   {
     name: "dark",
-    primary: "\x1b[37m",        // white
-    secondary: "\x1b[90m",      // bright black
-    muted: "\x1b[2m",           // dim
-    accent_user: "\x1b[36m",    // cyan
-    accent_assistant: "\x1b[32m", // green
-    accent_tool: "\x1b[33m",    // yellow
-    accent_system: "\x1b[35m",  // magenta
-    success: "\x1b[32m",
-    warning: "\x1b[33m",
-    error: "\x1b[31m",
-    info: "\x1b[34m",
+    primary: "\u001b[37m",        // white
+    secondary: "\u001b[90m",      // bright black
+    muted: "\u001b[2m",           // dim
+    accent_user: "\u001b[36m",    // cyan
+    accent_assistant: "\u001b[32m", // green
+    accent_tool: "\u001b[33m",    // yellow
+    accent_system: "\u001b[35m",  // magenta
+    success: "\u001b[32m",
+    warning: "\u001b[33m",
+    error: "\u001b[31m",
+    info: "\u001b[34m",
     code_bg: "",
-    code_fg: "\x1b[33m",
-    reset: "\x1b[0m",
+    code_fg: "\u001b[33m",
+    reset: "\u001b[0m",
   }
 }
 
@@ -48,20 +48,20 @@ pub fn dark_theme() -> Theme {
 pub fn light_theme() -> Theme {
   {
     name: "light",
-    primary: "\x1b[30m",        // black
-    secondary: "\x1b[90m",
-    muted: "\x1b[2m",
-    accent_user: "\x1b[34m",    // blue
-    accent_assistant: "\x1b[32m", // green
-    accent_tool: "\x1b[33m",    // yellow
-    accent_system: "\x1b[35m",
-    success: "\x1b[32m",
-    warning: "\x1b[33m",
-    error: "\x1b[31m",
-    info: "\x1b[34m",
+    primary: "\u001b[30m",        // black
+    secondary: "\u001b[90m",
+    muted: "\u001b[2m",
+    accent_user: "\u001b[34m",    // blue
+    accent_assistant: "\u001b[32m", // green
+    accent_tool: "\u001b[33m",    // yellow
+    accent_system: "\u001b[35m",
+    success: "\u001b[32m",
+    warning: "\u001b[33m",
+    error: "\u001b[31m",
+    info: "\u001b[34m",
     code_bg: "",
-    code_fg: "\x1b[36m",
-    reset: "\x1b[0m",
+    code_fg: "\u001b[36m",
+    reset: "\u001b[0m",
   }
 }
 

@@ -84,7 +84,7 @@ test "parse_frontmatter extracts metadata and body" {
 test "parse_frontmatter handles missing frontmatter" {
   let text = "plain content"
   let result = parse_frontmatter(text)
-  assert_eq(result.metadata.size(), 0)
+  assert_eq(result.metadata.length(), 0)
   assert_eq(result.body, "plain content")
 }
 

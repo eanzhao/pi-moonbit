@@ -11,7 +11,18 @@ fn main {
       }
     }
     Ok(CliParseResult::Login(config)) => {
-      let exit_code = run_nyxid_login(config, runtime)
+      // Route by client_id: empty → simplified CLI flow; non-empty → standard OAuth 2.0 + PKCE.
+      let exit_code = if config.client_id.length() > 0 {
+        run_nyxid_oauth_login(config, runtime)
+      } else {
+        run_nyxid_login(config, runtime)
+      }
+      if exit_code != 0 {
+        exit_process(exit_code)
+      }
+    }
+    Ok(CliParseResult::Models(config)) => {
+      let exit_code = run_models_command(config, runtime)
       if exit_code != 0 {
         exit_process(exit_code)
       }

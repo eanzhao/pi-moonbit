@@ -1,15 +1,15 @@
 test "ansi_colored wraps text with color and reset" {
   let result = ansi_colored("hello", ansi_red())
-  assert_true(result.has_prefix("\x1b[31m"))
+  assert_true(result.has_prefix("\u001b[31m"))
   assert_true(result.contains("hello"))
-  assert_true(result.has_suffix("\x1b[0m"))
+  assert_true(result.has_suffix("\u001b[0m"))
 }
 
 test "ansi_bold_colored applies bold and color" {
   let result = ansi_bold_colored("test", ansi_blue())
-  assert_true(result.has_prefix("\x1b[1m\x1b[34m"))
+  assert_true(result.has_prefix("\u001b[1m\u001b[34m"))
   assert_true(result.contains("test"))
-  assert_true(result.has_suffix("\x1b[0m"))
+  assert_true(result.has_suffix("\u001b[0m"))
 }
 
 test "ansi format helpers produce expected labels" {

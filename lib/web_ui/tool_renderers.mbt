@@ -165,7 +165,7 @@ pub fn edit_tool_renderer() -> ToolRenderer {
       }
       { label: "edit", summary: path, icon: "✂️", details: [("path", path)] }
     },
-    render_result: fn(_name, details, is_error) {
+    render_result: fn(_name, _details, is_error) {
       {
         status: if is_error { Failure } else { Success },
         preview: if is_error { "edit failed" } else { "edited" },

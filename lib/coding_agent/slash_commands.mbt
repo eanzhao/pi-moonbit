@@ -102,7 +102,7 @@ pub fn register_builtin_commands(registry : SlashCommandRegistry) -> Unit {
     name: "clear",
     description: "Clear screen",
     handler: fn(_args, ctx) {
-      (ctx.write)("\x1b[2J\x1b[H")
+      (ctx.write)("\u001b[2J\u001b[H")
       Ok(())
     },
   })

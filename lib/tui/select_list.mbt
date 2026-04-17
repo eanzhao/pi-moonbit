@@ -3,7 +3,7 @@ pub(all) struct SelectItem {
   value : String
   label : String
   description : String?
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///| 列表选择组件。
 /// 支持过滤、上下导航、确认和取消。

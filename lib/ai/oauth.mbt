@@ -46,7 +46,7 @@ pub(all) suberror OAuthError {
 pub(all) struct PkceChallenge {
   verifier : String
   challenge : String
-  method : String
+  challenge_method : String
 } derive(Show, Eq)
 
 ///| 创建 PKCE 挑战（使用 S256 方法）。
@@ -56,7 +56,7 @@ pub(all) struct PkceChallenge {
 ///
 /// 实际的 hash 和 base64url 编码由 host 注入（因为需要 crypto/FFI）。
 pub fn pkce_challenge_s256(verifier : String, challenge : String) -> PkceChallenge {
-  { verifier, challenge, method: "S256" }
+  { verifier, challenge, challenge_method: "S256" }
 }
 
 ///| OAuth Provider 接口（平台无关）。

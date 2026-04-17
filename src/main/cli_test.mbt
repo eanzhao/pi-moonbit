@@ -428,3 +428,80 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
     Err(message) => fail(message)
   }
 }
+
+test "parse_cli_args dispatches models subcommand" {
+  let result = parse_cli_args(["pimbt", "models"], cwd="/workspace")
+  match result {
+    Ok(CliParseResult::Models(config)) => {
+      assert_eq(config.base_url, "https://nyx.chrono-ai.fun")
+      assert_true(config.credentials_path.has_suffix("/.pimbt/nyxid-credentials.json"))
+    }
+    _ => fail("expected Models config")
+  }
+}
+
+test "parse_cli_args strips node + script-path preamble from JS argv" {
+  // Shape that @env.args() returns on JS target: node + script path + user args
+  let result = parse_cli_args(
+    ["/usr/local/bin/node", "/build/out/main.js", "login", "--client-id", "abc"],
+    cwd="/workspace",
+  )
+  match result {
+    Ok(CliParseResult::Login(config)) => assert_eq(config.client_id, "abc")
+    _ => fail("expected Login config after stripping node preamble")
+  }
+}
+
+test "parse_cli_args preserves pimbt-style argv unchanged" {
+  // Test-shape argv (no node path) should still dispatch to models
+  let result = parse_cli_args(["pimbt", "models", "--bearer", "xyz"], cwd="/workspace")
+  match result {
+    Ok(CliParseResult::Models(config)) => assert_eq(config.bearer_override, Some("xyz"))
+    _ => fail("expected Models config")
+  }
+}
+
+test "parse_cli_args models respects --base-url and --bearer" {
+  let result = parse_cli_args(
+    ["pimbt", "models", "--base-url", "https://nyx.example.com", "--bearer", "abc"],
+    cwd="/workspace",
+  )
+  match result {
+    Ok(CliParseResult::Models(config)) => {
+      assert_eq(config.base_url, "https://nyx.example.com")
+      assert_eq(config.bearer_override, Some("abc"))
+    }
+    _ => fail("expected Models config")
+  }
+}
+
+test "format_llm_status renders providers and supported models" {
+  let response = Json::object({
+    "providers": Json::array([
+      Json::object({ "name": Json::string("openai"), "status": Json::string("ready") }),
+      Json::object({ "name": Json::string("anthropic"), "status": Json::string("not_connected") }),
+    ]),
+    "gateway_url": Json::string("https://nyx.example.com/api/v1/llm/gateway"),
+    "supported_models": Json::array([
+      Json::string("gpt-4o"),
+      Json::string("claude-sonnet-4-5-20250929"),
+    ]),
+  })
+  let rendered = format_llm_status(response)
+  assert_true(rendered.contains("Connected Providers"))
+  assert_true(rendered.contains("openai"))
+  assert_true(rendered.contains("ready"))
+  assert_true(rendered.contains("anthropic"))
+  assert_true(rendered.contains("not_connected"))
+  assert_true(rendered.contains("Supported Models"))
+  assert_true(rendered.contains("gpt-4o"))
+  assert_true(rendered.contains("claude-sonnet-4-5-20250929"))
+  assert_true(rendered.contains("nyxid-gateway"))
+}
+
+test "format_llm_status handles missing fields gracefully" {
+  let response = Json::object({})
+  let rendered = format_llm_status(response)
+  assert_true(rendered.contains("Connected Providers"))
+  assert_true(rendered.contains("Supported Models"))
+}

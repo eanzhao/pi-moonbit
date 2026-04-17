@@ -12,7 +12,7 @@ pub(all) enum KeyEvent {
   End
   TextInput(String)
   Unsupported(String)
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///| 将原始终端输入解析为较稳定的按键事件。
 /// 当前只覆盖 `Input` 组件需要的最小集合。

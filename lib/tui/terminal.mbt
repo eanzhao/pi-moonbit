@@ -2,7 +2,7 @@
 pub(all) struct TerminalSize {
   mut width : Int
   mut height : Int
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///| 终端输出抽象。
 /// 当前阶段只要求终端能够应用 `ScreenPatch`。

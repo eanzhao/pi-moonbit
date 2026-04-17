@@ -22,6 +22,13 @@ pub(all) enum CliParseResult {
   Run(CliConfig)
   Help(String)
   Login(LoginConfig)
+  Models(ModelsConfig)
+}
+
+pub(all) struct ModelsConfig {
+  base_url : String
+  credentials_path : String
+  bearer_override : String?  // allows manual override for ad-hoc checks
 }
 
 pub(all) struct CliHostRuntime {

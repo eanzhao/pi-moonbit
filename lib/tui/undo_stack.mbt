@@ -6,12 +6,12 @@ pub(all) struct UndoStack[T] {
   max_size : Int
 }
 
-pub fn UndoStack::new[T](max_size? : Int = 100) -> UndoStack[T] {
+pub fn[T] UndoStack::new(max_size? : Int = 100) -> UndoStack[T] {
   { history: [], cursor: -1, max_size }
 }
 
 ///| 推入新状态（这会丢弃 cursor 之后的历史）。
-pub fn UndoStack::push[T](self : UndoStack[T], state : T) -> Unit {
+pub fn[T] UndoStack::push(self : UndoStack[T], state : T) -> Unit {
   // Drop redo history
   while self.history.length() > self.cursor + 1 {
     ignore(self.history.pop())
@@ -33,21 +33,21 @@ pub fn UndoStack::push[T](self : UndoStack[T], state : T) -> Unit {
 }
 
 ///| 撤销（返回上一个状态）。
-pub fn UndoStack::undo[T](self : UndoStack[T]) -> T? {
+pub fn[T] UndoStack::undo(self : UndoStack[T]) -> T? {
   if self.cursor <= 0 { return None }
   self.cursor = self.cursor - 1
   Some(self.history[self.cursor])
 }
 
 ///| 重做（返回下一个状态）。
-pub fn UndoStack::redo[T](self : UndoStack[T]) -> T? {
+pub fn[T] UndoStack::redo(self : UndoStack[T]) -> T? {
   if self.cursor >= self.history.length() - 1 { return None }
   self.cursor = self.cursor + 1
   Some(self.history[self.cursor])
 }
 
 ///| 当前状态。
-pub fn UndoStack::current[T](self : UndoStack[T]) -> T? {
+pub fn[T] UndoStack::current(self : UndoStack[T]) -> T? {
   if self.cursor >= 0 && self.cursor < self.history.length() {
     Some(self.history[self.cursor])
   } else {
@@ -55,15 +55,15 @@ pub fn UndoStack::current[T](self : UndoStack[T]) -> T? {
   }
 }
 
-pub fn UndoStack::can_undo[T](self : UndoStack[T]) -> Bool {
+pub fn[T] UndoStack::can_undo(self : UndoStack[T]) -> Bool {
   self.cursor > 0
 }
 
-pub fn UndoStack::can_redo[T](self : UndoStack[T]) -> Bool {
+pub fn[T] UndoStack::can_redo(self : UndoStack[T]) -> Bool {
   self.cursor < self.history.length() - 1
 }
 
-pub fn UndoStack::clear[T](self : UndoStack[T]) -> Unit {
+pub fn[T] UndoStack::clear(self : UndoStack[T]) -> Unit {
   self.history.clear()
   self.cursor = -1
 }

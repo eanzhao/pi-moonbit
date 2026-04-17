@@ -6,14 +6,14 @@ pub(all) struct LinePatch {
   lines : Array[String]
   /// 新帧比旧帧更短时，需要清除的尾部行数
   cleared_line_count : Int
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///| 一次屏幕更新的抽象表示。
 pub(all) enum ScreenPatch {
   Noop
   Full(Array[String])
   Update(LinePatch)
-} derive(Debug, Eq)
+} derive(Show, Eq)
 
 ///| 比较前后两帧，生成最小可接受的行级 patch。
 /// 当前策略不是极限最优，而是从首个变化行开始重写尾部。

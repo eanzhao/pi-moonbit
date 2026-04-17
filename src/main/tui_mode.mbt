@@ -75,7 +75,7 @@ fn run_tui_prompt(app : CliApp, display : StreamingDisplay, prompt : String) -> 
 
 fn handle_tui_repl_command(
   app : CliApp,
-  display : StreamingDisplay,
+  _display : StreamingDisplay,
   line : String
 ) -> ReplCommandResult {
   if line == "" { return Continue }
@@ -149,18 +149,16 @@ struct StreamingDisplay {
   write : (String) -> Unit
   mut streaming : Bool
   mut had_error : Bool
-  mut in_tool : Bool
   mut printed_assistant_label : Bool
 }
 
 fn StreamingDisplay::new(runtime : CliHostRuntime) -> StreamingDisplay {
-  { write: runtime.stdout_write, streaming: false, had_error: false, in_tool: false, printed_assistant_label: false }
+  { write: runtime.stdout_write, streaming: false, had_error: false, printed_assistant_label: false }
 }
 
 fn StreamingDisplay::reset(self : StreamingDisplay) -> Unit {
   self.streaming = false
   self.had_error = false
-  self.in_tool = false
   self.printed_assistant_label = false
 }
 
@@ -220,11 +218,9 @@ fn StreamingDisplay::handle_event(self : StreamingDisplay, event : @agent.AgentE
         (self.write)("\n")
         self.streaming = false
       }
-      self.in_tool = true
       (self.write)(@tui.ansi_tool_start(payload.tool_name) + "\n")
     }
     @agent.AgentEvent::ToolExecutionEnd(payload) => {
-      self.in_tool = false
       if payload.is_error {
         (self.write)(@tui.ansi_tool_error(payload.tool_name) + "\n")
       } else {

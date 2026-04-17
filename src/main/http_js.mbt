@@ -111,7 +111,7 @@ fn host_anthropic_stream(
   context : @ai.Context,
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   let base_url = match model.base_url {
     Some(url) => url
     None => "https://api.anthropic.com"
@@ -165,7 +165,7 @@ fn host_gemini_stream(
   context : @ai.Context,
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   let api_key = match options.api_key {
     Some(key) => key
     None =>
@@ -214,7 +214,7 @@ fn host_nyxid_stream(
   context : @ai.Context,
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   // 凭证查找优先级：
   //   1. options.api_key (Bearer)
   //   2. NYXID_TOKEN env var
@@ -267,7 +267,7 @@ fn host_openai_stream(
   context : @ai.Context,
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   let base_url = match model.base_url {
     Some(url) => url
     None => "https://api.openai.com/v1"
@@ -316,7 +316,7 @@ fn host_mistral_stream(
   context : @ai.Context,
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
-) -> Unit!@ai.StreamError {
+) -> Unit raise @ai.StreamError {
   let base_url = match model.base_url {
     Some(url) => url
     None => "https://api.mistral.ai/v1"
@@ -363,7 +363,11 @@ fn host_mistral_stream(
 ///
 /// 从存储的凭证文件加载时，自动检测 access_token 是否即将过期
 /// （60 秒缓冲），如果是则用 refresh_token 刷新并写回新凭证。
-fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String, String, String) {
+///
+/// 当 access_token 已过期且 refresh 明确失败（refresh_token 被吊销、
+/// 服务器拒绝等），raise StreamError 提示用户重新登录，而不是继续发送
+/// 已过期的 token 触发神秘的 401。
+fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String, String, String) raise @ai.StreamError {
   // 优先级 1: options.api_key as Bearer
   match options.api_key {
     Some(key) if key.length() > 0 => {
@@ -401,42 +405,70 @@ fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String
   }
   match host_read_text(creds_path) {
     Ok(text) => {
-      let json = try { @json.parse(text) } catch { _ => return (fallback_base, "", "") }
+      let json = try { @json.parse(text) } catch {
+        _ => raise @ai.StreamError("NyxID credentials file is corrupted (" + creds_path + "). Run `pimbt login` again.")
+      }
       match @ai.parse_nyxid_stored_credentials(json) {
         Ok(stored) => {
-          // Check expiry with 60-second buffer
           let now = nyxid_now_epoch_seconds()
-          let refreshed = match stored.credentials.expires_at {
-            Some(exp) if now + 60L >= exp => {
-              // Token expired or about to — try refresh
-              try_refresh_nyxid_token(stored, creds_path)
-            }
-            _ => stored  // Not expired, use as-is
+          let needs_refresh = match stored.credentials.expires_at {
+            Some(exp) => now + 60L >= exp
+            None => false
           }
-          (refreshed.base_url, refreshed.credentials.access_token, "")
+          if needs_refresh {
+            match try_refresh_nyxid_token(stored, creds_path) {
+              Ok(refreshed) => (refreshed.base_url, refreshed.credentials.access_token, "")
+              Err(reason) => {
+                let past_expiry = match stored.credentials.expires_at {
+                  Some(exp) => now >= exp
+                  None => false
+                }
+                if past_expiry {
+                  raise @ai.StreamError(
+                    "NyxID session expired and refresh failed (" + reason + "). " +
+                    "Run `pimbt login` to re-authenticate.",
+                  )
+                }
+                // About to expire but refresh hiccup — use existing token; the
+                // actual LLM call will either succeed or surface a real 401.
+                (stored.base_url, stored.credentials.access_token, "")
+              }
+            }
+          } else {
+            (stored.base_url, stored.credentials.access_token, "")
+          }
         }
-        Err(_) => (fallback_base, "", "")
+        Err(msg) => raise @ai.StreamError("NyxID credentials file invalid: " + msg + ". Run `pimbt login`.")
       }
     }
     Err(_) => (fallback_base, "", "")
   }
 }
 
-///| 尝试刷新 NyxID access token。失败时返回原凭证。
+///| 尝试刷新 NyxID access token。
+///
+/// 成功返回新的 stored credentials（已写回磁盘）；失败返回 Err(reason)。
+/// Err 分两类：
+///   - "no refresh_token" — 本地没存 refresh_token
+///   - "network: ..." — HTTP 请求本身失败
+///   - "server: ..." — 服务器返回的错误（通常是 invalid_grant，token 被吊销）
+///   - "parse: ..." — 响应解析失败
 fn try_refresh_nyxid_token(
   stored : @ai.NyxidStoredCredentials,
   creds_path : String
-) -> @ai.NyxidStoredCredentials {
+) -> Result[@ai.NyxidStoredCredentials, String] {
   let refresh_token = match stored.credentials.refresh_token {
     Some(rt) if rt.length() > 0 => rt
-    _ => return stored  // No refresh token, can't refresh
+    _ => return Err("no refresh_token stored")
   }
   let form = @ai.build_nyxid_refresh_form(refresh_token, stored.client_id, None)
   let form_body = @ai.encode_form(form)
   let token_url = nyxid_trim_slash(stored.base_url) + @ai.nyxid_oauth_token_path
   match host_post_form(token_url, form_body) {
     Ok((_status, body)) => {
-      let json = try { @json.parse(body) } catch { _ => return stored }
+      let json = try { @json.parse(body) } catch {
+        _ => return Err("parse: token response is not valid JSON")
+      }
       let now = nyxid_now_epoch_seconds()
       match @ai.parse_nyxid_token_response(json, now) {
         Ok(new_creds) => {
@@ -451,15 +483,15 @@ fn try_refresh_nyxid_token(
             client_id: stored.client_id,
             credentials: final_creds,
           }
-          // Best-effort persist; even if write fails, use in-memory
+          // Best-effort persist; even if write fails, return in-memory creds
           let json_out = @ai.nyxid_credentials_to_json(final_creds, stored.base_url, stored.client_id)
           let _ = host_write_text(creds_path, json_out.stringify(escape_slash=false))
-          final_stored
+          Ok(final_stored)
         }
-        Err(_) => stored
+        Err(e) => Err("server: " + e.to_string())
       }
     }
-    Err(_) => stored
+    Err(msg) => Err("network: " + msg)
   }
 }
 
@@ -496,9 +528,10 @@ fn nyxid_parse_iso_to_epoch(iso : String) -> Int64 {
 }
 
 fn nyxid_parse_int_or(s : String, default : Int) -> Int {
-  match (try? @string.parse_int(s)) {
-    Ok(n) => n
-    Err(_) => default
+  try @string.parse_int(s) catch {
+    _ => default
+  } noraise {
+    n => n
   }
 }
 

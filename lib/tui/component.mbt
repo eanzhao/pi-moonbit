@@ -1,5 +1,5 @@
 ///| 组件在容器中的稳定句柄。
-pub(all) struct ComponentHandle(Int) derive(Debug, Eq)
+pub(all) struct ComponentHandle(Int) derive(Show, Eq)
 
 ///| TUI 组件的统一抽象。
 /// 组件只需要保证 `render()` 返回的每一行都不超过给定宽度。

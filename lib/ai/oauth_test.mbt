@@ -1,6 +1,6 @@
 test "pkce_challenge_s256 constructs challenge" {
   let pkce = pkce_challenge_s256("test-verifier-43-chars-at-least-long-enough", "ABC123")
-  assert_eq(pkce.method, "S256")
+  assert_eq(pkce.challenge_method, "S256")
   assert_eq(pkce.verifier, "test-verifier-43-chars-at-least-long-enough")
   assert_eq(pkce.challenge, "ABC123")
 }

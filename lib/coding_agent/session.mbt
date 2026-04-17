@@ -192,7 +192,7 @@ pub fn AgentSession::run_extension_command(
 }
 
 fn AgentSession::bind_agent(self : AgentSession) -> Unit {
-  self.agent.set_transform_context(fn(messages) {
+  self.agent.set_transform_context(fn(_messages) {
     let ctx = self.make_extension_context()
     let session_messages = self.session_manager.build_session_context().messages
     self.extensions.transform_context(session_messages, ctx)

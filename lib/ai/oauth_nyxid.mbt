@@ -1,10 +1,74 @@
-///| NyxID OAuth provider.
+///| NyxID 认证支持。
 ///
-/// NyxID 实现标准 OAuth 2.0 + PKCE (S256)。
-/// CLI 应用推荐使用 public client（无 client_secret，仅靠 PKCE 保证安全）。
+/// 提供两种流程：
+/// 1. **CLI 流程**（推荐，UX 最简）：使用 NyxID 前端的 `/cli-auth` 路由，
+///    不需要 client_id。参考 NyxID 官方 CLI。
+/// 2. **标准 OAuth 2.0 + PKCE (S256)**：用于 web 应用或需要 client_id
+///    的场景。
+///
+/// CLI 流程示意：
+/// ```
+/// pimbt → 起本地 listener → 打开浏览器到 {frontend}/cli-auth?port=X&state=Y
+/// frontend → 用户登录/授权 → POST 到 http://127.0.0.1:X/callback?access_token=...
+/// pimbt ← 拿到 tokens
+/// ```
 
 ///| NyxID 默认 base URL（托管实例）。
 pub let nyxid_default_base_url : String = "https://nyx.chrono-ai.fun"
+
+///| NyxID 公共配置端点（返回 frontend_url 等）。
+pub let nyxid_public_config_path : String = "/api/v1/public/config"
+
+///| 构建 NyxID CLI 登录 URL（推荐流程，无需 client_id）。
+///
+/// 访问此 URL 后：
+/// 1. 用户在 NyxID 前端登录（如果尚未登录）
+/// 2. 前端生成 access_token 并通过 `http://127.0.0.1:{port}/callback?access_token=...&refresh_token=...&state=...` 回推给 CLI
+pub fn build_nyxid_cli_auth_url(
+  frontend_url : String,
+  port : Int,
+  state : String,
+  client_ua? : String = "pimbt"
+) -> String {
+  let base = trim_trailing_slash(frontend_url)
+  let params = [
+    "port=" + port.to_string(),
+    "state=" + nyxid_url_encode(state),
+    "client_ua=" + nyxid_url_encode(client_ua),
+  ]
+  base + "/cli-auth?" + params.join("&")
+}
+
+///| 解析 NyxID 公共配置响应，提取 frontend_url。
+pub fn parse_nyxid_public_config(response : Json) -> Result[String, String] {
+  guard response is Object(obj) else {
+    return Err("expected JSON object in public config")
+  }
+  match obj.get("frontend_url") {
+    Some(String(url)) => Ok(trim_trailing_slash(url))
+    _ => Err("missing frontend_url in public config")
+  }
+}
+
+///| NyxID CLI 流程的直接 token 响应（从 callback 参数构建）。
+///
+/// 与标准 OAuth token 响应的区别：
+/// - 没有 expires_in（CLI flow 默认 token 生命周期由服务端决定）
+/// - 没有 id_token
+pub fn nyxid_cli_credentials_from_callback(
+  access_token : String,
+  refresh_token : String?,
+  now_epoch_seconds : Int64,
+  assumed_ttl_seconds? : Int = 900  // 15 min default
+) -> OAuthCredentials {
+  {
+    access_token,
+    refresh_token,
+    expires_at: Some(now_epoch_seconds + assumed_ttl_seconds.to_int64()),
+    token_type: "Bearer",
+    extra: None,
+  }
+}
 
 ///| NyxID OAuth 授权端点路径。
 pub let nyxid_oauth_auth_path : String = "/oauth/authorize"
@@ -27,18 +91,24 @@ pub fn build_nyxid_auth_url(
   redirect_uri : String,
   state : String,
   pkce : PkceChallenge,
-  scope? : String = nyxid_default_scope
+  scope? : String = ""
 ) -> String {
   let base = trim_trailing_slash(base_url)
-  let params = [
+  let params : Array[String] = [
     "response_type=code",
     "client_id=" + nyxid_url_encode(client_id),
     "redirect_uri=" + nyxid_url_encode(redirect_uri),
-    "scope=" + nyxid_url_encode(scope),
     "state=" + nyxid_url_encode(state),
     "code_challenge=" + nyxid_url_encode(pkce.challenge),
-    "code_challenge_method=" + pkce.method,
+    "code_challenge_method=" + pkce.challenge_method,
   ]
+  // Only include scope when caller explicitly provides one; otherwise let
+  // NyxID fall back to the client's configured allowed_scopes (matches NyxID
+  // CLI's behaviour and avoids rejection when the client is registered with
+  // non-default scopes).
+  if scope.length() > 0 {
+    params.push("scope=" + nyxid_url_encode(scope))
+  }
   base + nyxid_oauth_auth_path + "?" + params.join("&")
 }
 
