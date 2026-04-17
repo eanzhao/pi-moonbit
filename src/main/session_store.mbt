@@ -1,7 +1,7 @@
 pub let current_session_file_version : Int = 1
 
 pub fn default_session_dir(cwd : String) -> String {
-  resolve_cli_path(cwd, ".pi-moonbit/sessions")
+  resolve_cli_path(cwd, ".pimbt/sessions")
 }
 
 pub fn session_file_path(session_dir : String, session_id : String) -> String {

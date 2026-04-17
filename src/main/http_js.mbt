@@ -204,6 +204,66 @@ fn host_gemini_stream(
   }
 }
 
+///| 发起 NyxID gateway (OpenAI 兼容) 的 SSE 流式请求。
+///
+/// NyxID 是一个凭证代理：用户在 NyxID 面板存储 LLM API keys，
+/// pi-moonbit 只需要 NyxID 的 access token（OAuth）或 API key。
+/// NyxID 服务端根据 model id 自动路由到对应 Provider 并注入凭证。
+fn host_nyxid_stream(
+  model : @ai.Model,
+  context : @ai.Context,
+  options : @ai.StreamOptions,
+  handler : @ai.EventHandler
+) -> Unit!@ai.StreamError {
+  let base_url = match model.base_url {
+    Some(url) => url
+    None => host_env_var("NYXID_BASE_URL").unwrap_or("https://nyx.chrono-ai.fun")
+  }
+  let url = if base_url.has_suffix("/") {
+    base_url + "api/v1/llm/gateway/v1/chat/completions"
+  } else {
+    base_url + "/api/v1/llm/gateway/v1/chat/completions"
+  }
+  // 三种认证方式优先级：options.api_key (Bearer token) > NYXID_TOKEN > NYXID_API_KEY
+  let token = match options.api_key {
+    Some(key) => key
+    None => host_env_var("NYXID_TOKEN").unwrap_or("")
+  }
+  let api_key = host_env_var("NYXID_API_KEY").unwrap_or("")
+  let extra_headers = if api_key.length() > 0 && token.length() == 0 {
+    Json::object({ "X-API-Key": Json::string(api_key) }).stringify(escape_slash=false)
+  } else {
+    ""
+  }
+  let body = @ai.build_openai_request_body(model, context, options)
+  let result = host_fetch_sse_ffi(
+    url,
+    body.stringify(escape_slash=false),
+    token,
+    extra_headers,
+  )
+  if result.length() == 0 {
+    raise @ai.StreamError("empty response from NyxID")
+  }
+  if result[0] == "err" {
+    let message = if result.length() > 1 { result[1] } else { "unknown error" }
+    raise @ai.StreamError(message)
+  }
+  let state = @ai.OpenAiStreamState::new(model)
+  for i = 1; i < result.length(); i = i + 1 {
+    let events = @ai.parse_openai_sse_line(result[i], state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+  if !state.terminal_emitted {
+    let events = @ai.parse_openai_sse_line("data: [DONE]", state)
+    for event in events {
+      handler.0(event)
+    }
+  }
+}
+
 ///| 发起 OpenAI 兼容的 SSE 流式请求并通过 EventHandler 推送事件。
 fn host_openai_stream(
   model : @ai.Model,

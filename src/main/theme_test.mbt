@@ -64,9 +64,9 @@ test "render_thinking_selector lists all levels" {
   assert_true(rendered.contains("xhigh"))
 }
 
-test "render_welcome_banner mentions pi-moonbit" {
+test "render_welcome_banner mentions pimbt" {
   let theme = dark_theme()
   let banner = render_welcome_banner(theme, "gpt-4o", "off")
-  assert_true(banner.contains("pi-moonbit"))
+  assert_true(banner.contains("pimbt"))
   assert_true(banner.contains("gpt-4o"))
 }

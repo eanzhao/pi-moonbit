@@ -148,10 +148,10 @@ pub fn default_system_prompt() -> String {
 
 pub fn cli_help_text() -> String {
   [
-    "pi-moonbit - minimal coding agent CLI",
+    "pimbt - minimal coding agent CLI",
     "",
     "Usage:",
-    "  pi-moonbit [options] [messages...]",
+    "  pimbt [options] [messages...]",
     "",
     "Options:",
     "  -h, --help                 Show this help",
@@ -166,7 +166,7 @@ pub fn cli_help_text() -> String {
     "  --cwd <path>               Override working directory for tools",
     "  --model <id>               Set model id",
     "  --provider <id>            Set provider id",
-    "  --api <id>                 Set API id (openai-responses, anthropic-messages, mistral-conversation, etc.)",
+    "  --api <id>                 Set API id (openai-responses, anthropic-messages, mistral-conversation, nyxid-gateway, etc.)",
     "  --base-url <url>           Override LLM API base URL",
     "  --thinking <level>         off|minimal|low|medium|high|xhigh",
     "",

@@ -70,6 +70,10 @@ pub let api_bedrock : ApiId = ApiId("bedrock-converse-stream")
 ///|
 pub let api_azure_openai : ApiId = ApiId("azure-openai-responses")
 
+///|
+/// NyxID OpenAI 兼容 gateway — 复用 OpenAI 请求/响应格式。
+pub let api_nyxid_gateway : ApiId = ApiId("nyxid-gateway")
+
 // --- 已知供应商标识符 ---
 
 ///|
@@ -101,6 +105,10 @@ pub let provider_azure_openai : ProviderId = ProviderId("azure-openai")
 
 ///|
 pub let provider_ollama : ProviderId = ProviderId("ollama")
+
+///|
+/// NyxID provider (credential broker / LLM gateway)。
+pub let provider_nyxid : ProviderId = ProviderId("nyxid")
 
 ///| 根据模型价格和实际用量计算总费用（美元）。
 /// 价格按每百万 token 计算，因此需要除以 1,000,000。

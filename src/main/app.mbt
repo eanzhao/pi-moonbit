@@ -50,7 +50,9 @@ fn create_cli_app(
             None =>
               session.agent.set_stream_fn(@agent.AgentStreamFn(fn(model, context, options, handler) {
                 try {
-                  if model.api == @ai.api_anthropic_messages {
+                  if model.api == @ai.api_nyxid_gateway {
+                    host_nyxid_stream(model, context, options, handler)
+                  } else if model.api == @ai.api_anthropic_messages {
                     host_anthropic_stream(model, context, options, handler)
                   } else if model.api == @ai.api_google_genai {
                     host_gemini_stream(model, context, options, handler)

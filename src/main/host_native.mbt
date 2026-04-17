@@ -182,7 +182,7 @@ fn host_run_command(
   command : String,
   cwd : String
 ) -> Result[@coding_agent.CommandExecutionResult, String] {
-  let base = host_native_temp_base("pi-moonbit-cmd")
+  let base = host_native_temp_base("pimbt-cmd")
   let stdout_path = base + ".stdout"
   let stderr_path = base + ".stderr"
   let exit_path = base + ".exit"

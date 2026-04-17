@@ -38,7 +38,7 @@ fn run_tui_interactive_mode(app : CliApp, initial_messages : Array[String]) -> I
 fn tui_print_welcome(app : CliApp) -> Unit {
   let write = app.runtime.stdout_write
   write(
-    @tui.ansi_bold() + "pi-moonbit" + @tui.ansi_reset() +
+    @tui.ansi_bold() + "pimbt" + @tui.ansi_reset() +
     @tui.ansi_info(" — interactive mode") + "\n",
   )
   write(

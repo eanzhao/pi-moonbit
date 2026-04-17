@@ -186,7 +186,7 @@ fn seed_session_file(
 
 test "parse_cli_args handles print mode and session path" {
   let result = parse_cli_args(
-    ["pi-moonbit", "--print", "--session", "state.jsonl", "--thinking", "high", "hello"],
+    ["pimbt", "--print", "--session", "state.jsonl", "--thinking", "high", "hello"],
     cwd="/workspace",
   )
   match result {
@@ -202,7 +202,7 @@ test "parse_cli_args handles print mode and session path" {
 
 test "parse_cli_args resolves continue and session dir from final cwd" {
   let result = parse_cli_args(
-    ["pi-moonbit", "--session-dir", "state", "--cwd", "/workspace/app", "--continue", "hello"],
+    ["pimbt", "--session-dir", "state", "--cwd", "/workspace/app", "--continue", "hello"],
     cwd="/workspace",
   )
   match result {
@@ -236,12 +236,12 @@ test "session store round-trips transcript and session context" {
   let save_result = save_session_to_file(
     runtime,
     session_manager,
-    "/tmp/project/.pi-moonbit/session.jsonl",
+    "/tmp/project/.pimbt/session.jsonl",
     "/tmp/project",
   )
   assert_true(save_result is Ok(_))
 
-  let loaded = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/session.jsonl")
+  let loaded = load_session_from_file(runtime, "/tmp/project/.pimbt/session.jsonl")
   match loaded {
     Ok(payload) => {
       let transcript = payload.session_manager.build_transcript_messages()
@@ -264,7 +264,7 @@ test "run_cli print mode persists session and prints assistant output" {
   let config : CliConfig = {
     mode: CliMode::Print,
     system_prompt: default_system_prompt(),
-    session_path: Some("/tmp/project/.pi-moonbit/session.jsonl"),
+    session_path: Some("/tmp/project/.pimbt/session.jsonl"),
     session_dir: None,
     persist_session: true,
     continue_session: false,
@@ -279,9 +279,9 @@ test "run_cli print mode persists session and prints assistant output" {
   assert_eq(exit_code, 0)
   assert_eq(stdout.val.join(""), "echo:hello\n")
   assert_eq(stderr.val.length(), 0)
-  assert_true(files.val.exists("/tmp/project/.pi-moonbit/session.jsonl"))
+  assert_true(files.val.exists("/tmp/project/.pimbt/session.jsonl"))
 
-  let loaded = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/session.jsonl")
+  let loaded = load_session_from_file(runtime, "/tmp/project/.pimbt/session.jsonl")
   match loaded {
     Ok(payload) => {
       let transcript = payload.session_manager.build_transcript_messages()
@@ -315,7 +315,7 @@ test "run_cli interactive mode handles prompt then quit" {
   let exit_code = run_cli(config, runtime)
   assert_eq(exit_code, 0)
   let combined = stdout.val.join("")
-  assert_true(combined.contains("pi-moonbit"))
+  assert_true(combined.contains("pimbt"))
   assert_true(combined.contains("echo:hello"))
   assert_eq(stderr.val.length(), 0)
 }
@@ -329,7 +329,7 @@ test "run_cli continue mode resumes most recent session file" {
 
   seed_session_file(
     runtime,
-    "/tmp/project/.pi-moonbit/sessions/session-old.jsonl",
+    "/tmp/project/.pimbt/sessions/session-old.jsonl",
     "/tmp/project",
     "session-old",
     "2026-04-14T00:00:00.000Z",
@@ -337,7 +337,7 @@ test "run_cli continue mode resumes most recent session file" {
   )
   seed_session_file(
     runtime,
-    "/tmp/project/.pi-moonbit/sessions/session-new.jsonl",
+    "/tmp/project/.pimbt/sessions/session-new.jsonl",
     "/tmp/project",
     "session-new",
     "2026-04-15T00:00:00.000Z",
@@ -348,7 +348,7 @@ test "run_cli continue mode resumes most recent session file" {
     mode: CliMode::Print,
     system_prompt: default_system_prompt(),
     session_path: None,
-    session_dir: Some("/tmp/project/.pi-moonbit/sessions"),
+    session_dir: Some("/tmp/project/.pimbt/sessions"),
     persist_session: true,
     continue_session: true,
     resume_session: false,
@@ -362,7 +362,7 @@ test "run_cli continue mode resumes most recent session file" {
   assert_eq(exit_code, 0)
   assert_true(stdout.val.join("").contains("echo:follow up"))
 
-  let resumed = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-new.jsonl")
+  let resumed = load_session_from_file(runtime, "/tmp/project/.pimbt/sessions/session-new.jsonl")
   match resumed {
     Ok(payload) => {
       let transcript = payload.session_manager.build_transcript_messages()
@@ -371,7 +371,7 @@ test "run_cli continue mode resumes most recent session file" {
     Err(message) => fail(message)
   }
 
-  let untouched = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-old.jsonl")
+  let untouched = load_session_from_file(runtime, "/tmp/project/.pimbt/sessions/session-old.jsonl")
   match untouched {
     Ok(payload) => assert_eq(payload.session_manager.build_transcript_messages().length(), 2)
     Err(message) => fail(message)
@@ -387,7 +387,7 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
 
   seed_session_file(
     runtime,
-    "/tmp/project/.pi-moonbit/sessions/session-alpha.jsonl",
+    "/tmp/project/.pimbt/sessions/session-alpha.jsonl",
     "/tmp/project",
     "session-alpha",
     "2026-04-15T00:00:00.000Z",
@@ -395,7 +395,7 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
   )
   seed_session_file(
     runtime,
-    "/tmp/project/.pi-moonbit/sessions/session-beta.jsonl",
+    "/tmp/project/.pimbt/sessions/session-beta.jsonl",
     "/tmp/project",
     "session-beta",
     "2026-04-14T00:00:00.000Z",
@@ -406,7 +406,7 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
     mode: CliMode::Interactive,
     system_prompt: default_system_prompt(),
     session_path: None,
-    session_dir: Some("/tmp/project/.pi-moonbit/sessions"),
+    session_dir: Some("/tmp/project/.pimbt/sessions"),
     persist_session: true,
     continue_session: false,
     resume_session: true,
@@ -422,7 +422,7 @@ test "run_cli resume mode lets user choose a session before interactive loop" {
   assert_true(combined_stdout.contains("Saved sessions:"))
   assert_true(combined_stdout.contains("echo:hello"))
 
-  let selected = load_session_from_file(runtime, "/tmp/project/.pi-moonbit/sessions/session-beta.jsonl")
+  let selected = load_session_from_file(runtime, "/tmp/project/.pimbt/sessions/session-beta.jsonl")
   match selected {
     Ok(payload) => assert_eq(payload.session_manager.build_transcript_messages().length(), 4)
     Err(message) => fail(message)

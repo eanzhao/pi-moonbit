@@ -97,7 +97,7 @@ pub fn render_thinking_selector(theme : Theme, current : String) -> String {
 
 ///| 渲染欢迎横幅。
 pub fn render_welcome_banner(theme : Theme, model : String, thinking : String) -> String {
-  theme_colored(theme, "pi-moonbit", theme.primary) +
+  theme_colored(theme, "pimbt", theme.primary) +
   theme_colored(theme, " — interactive mode", theme.muted) + "\n" +
   theme_colored(theme, "model: " + model + "  thinking: " + thinking, theme.muted) + "\n" +
   theme_colored(theme, "Type :help for commands, :quit to exit.", theme.muted)
