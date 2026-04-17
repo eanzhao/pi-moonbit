@@ -2,6 +2,10 @@ pub fn parse_cli_args(
   argv : Array[String],
   cwd? : String = "."
 ) -> Result[CliParseResult, String] {
+  // Check for `login` subcommand first
+  if argv.length() >= 2 && argv[1] == "login" {
+    return parse_login_args(argv, cwd)
+  }
   let mut mode = CliMode::Interactive
   let mut system_prompt = default_system_prompt()
   let mut session_path_arg : String? = None
@@ -152,6 +156,7 @@ pub fn cli_help_text() -> String {
     "",
     "Usage:",
     "  pimbt [options] [messages...]",
+    "  pimbt login --client-id <id>   # OAuth login (NyxID)",
     "",
     "Options:",
     "  -h, --help                 Show this help",
@@ -242,4 +247,79 @@ fn is_absolute_path(path : String) -> Bool {
 
 fn cli_bool_to_int(value : Bool) -> Int {
   if value { 1 } else { 0 }
+}
+
+///| 解析 `pimbt login [options]` 子命令。
+fn parse_login_args(argv : Array[String], cwd : String) -> Result[CliParseResult, String] {
+  let mut config = LoginConfig::defaults(cwd)
+  config = { ..config, client_id: host_env_var("NYXID_CLIENT_ID").unwrap_or("") }
+  config = { ..config, base_url: host_env_var("NYXID_BASE_URL").unwrap_or(config.base_url) }
+
+  let mut i = 2  // skip argv[0]=program, argv[1]=login
+  while i < argv.length() {
+    let arg = argv[i]
+    if arg == "--help" || arg == "-h" {
+      return Ok(CliParseResult::Help(login_help_text()))
+    } else if arg == "--provider" {
+      guard i + 1 < argv.length() else { return Err("missing value for --provider") }
+      i = i + 1
+      config = { ..config, provider: argv[i] }
+    } else if arg == "--client-id" {
+      guard i + 1 < argv.length() else { return Err("missing value for --client-id") }
+      i = i + 1
+      config = { ..config, client_id: argv[i] }
+    } else if arg == "--client-secret" {
+      guard i + 1 < argv.length() else { return Err("missing value for --client-secret") }
+      i = i + 1
+      config = { ..config, client_secret: Some(argv[i]) }
+    } else if arg == "--base-url" {
+      guard i + 1 < argv.length() else { return Err("missing value for --base-url") }
+      i = i + 1
+      config = { ..config, base_url: argv[i] }
+    } else if arg == "--scope" {
+      guard i + 1 < argv.length() else { return Err("missing value for --scope") }
+      i = i + 1
+      config = { ..config, scope: argv[i] }
+    } else if arg == "--port" {
+      guard i + 1 < argv.length() else { return Err("missing value for --port") }
+      i = i + 1
+      match (try? @string.parse_int(argv[i])) {
+        Ok(port) => config = { ..config, redirect_port: port }
+        Err(_) => return Err("invalid port: " + argv[i])
+      }
+    } else if arg == "--credentials-path" {
+      guard i + 1 < argv.length() else { return Err("missing value for --credentials-path") }
+      i = i + 1
+      config = { ..config, credentials_path: argv[i] }
+    } else if arg.has_prefix("-") {
+      return Err("unknown login option: " + arg)
+    }
+    i = i + 1
+  }
+
+  if config.provider != "nyxid" {
+    return Err("only --provider nyxid is supported right now")
+  }
+  if config.client_id == "" {
+    return Err("missing --client-id (or set NYXID_CLIENT_ID env var)")
+  }
+  Ok(CliParseResult::Login(config))
+}
+
+pub fn login_help_text() -> String {
+  [
+    "pimbt login - authenticate with NyxID (or other OAuth providers)",
+    "",
+    "Usage:",
+    "  pimbt login --client-id <id> [options]",
+    "",
+    "Options:",
+    "  --provider <id>            OAuth provider (default: nyxid)",
+    "  --client-id <id>           OAuth client id (required; or NYXID_CLIENT_ID env)",
+    "  --client-secret <secret>   OAuth client secret (optional; confidential clients)",
+    "  --base-url <url>           Provider base URL (default: https://nyx.chrono-ai.fun)",
+    "  --scope <scope>            OAuth scope (default: openid profile email)",
+    "  --port <port>              Local callback port (default: 54545)",
+    "  --credentials-path <path>  Where to save credentials (default: ~/.pimbt/nyxid-credentials.json)",
+  ].join("\n")
 }

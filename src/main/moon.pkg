@@ -17,5 +17,11 @@ options(
     "http_js.mbt": [ "js" ],
     "http_native.mbt": [ "native", "llvm" ],
     "http_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "crypto_js.mbt": [ "js" ],
+    "crypto_native.mbt": [ "native", "llvm" ],
+    "crypto_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "oauth_server_js.mbt": [ "js" ],
+    "oauth_server_native.mbt": [ "native", "llvm" ],
+    "oauth_server_wasm.mbt": [ "wasm", "wasm-gc" ],
   },
 )

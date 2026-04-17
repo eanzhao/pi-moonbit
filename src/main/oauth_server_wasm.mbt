@@ -1,0 +1,15 @@
+fn host_wait_oauth_callback(
+  _port : Int,
+  _expected_state : String,
+  _timeout_ms : Int
+) -> Result[(String, String), String] {
+  Err("OAuth callback server is not implemented for wasm target")
+}
+
+fn host_post_form(_url : String, _form_body : String) -> Result[(Int, String), String] {
+  Err("HTTP POST is not implemented for wasm target")
+}
+
+fn host_open_browser(_url : String) -> Unit {
+  ()
+}

@@ -21,7 +21,8 @@ pub(all) struct CliConfig {
 pub(all) enum CliParseResult {
   Run(CliConfig)
   Help(String)
-} derive(Eq)
+  Login(LoginConfig)
+}
 
 pub(all) struct CliHostRuntime {
   read_text : (String) -> Result[String, String]

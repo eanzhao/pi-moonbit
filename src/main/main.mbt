@@ -10,6 +10,12 @@ fn main {
         exit_process(exit_code)
       }
     }
+    Ok(CliParseResult::Login(config)) => {
+      let exit_code = run_nyxid_login(config, runtime)
+      if exit_code != 0 {
+        exit_process(exit_code)
+      }
+    }
     Err(message) => {
       (runtime.stderr_write)(message + "\n")
       exit_process(1)

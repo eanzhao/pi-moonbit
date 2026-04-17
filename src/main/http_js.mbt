@@ -215,21 +215,18 @@ fn host_nyxid_stream(
   options : @ai.StreamOptions,
   handler : @ai.EventHandler
 ) -> Unit!@ai.StreamError {
-  let base_url = match model.base_url {
-    Some(url) => url
-    None => host_env_var("NYXID_BASE_URL").unwrap_or("https://nyx.chrono-ai.fun")
-  }
+  // 凭证查找优先级：
+  //   1. options.api_key (Bearer)
+  //   2. NYXID_TOKEN env var
+  //   3. NYXID_API_KEY env var (X-API-Key header)
+  //   4. ~/.pimbt/nyxid-credentials.json (Bearer)
+  let (resolved_base_url, token, api_key) = resolve_nyxid_auth(model, options)
+  let base_url = resolved_base_url
   let url = if base_url.has_suffix("/") {
     base_url + "api/v1/llm/gateway/v1/chat/completions"
   } else {
     base_url + "/api/v1/llm/gateway/v1/chat/completions"
   }
-  // 三种认证方式优先级：options.api_key (Bearer token) > NYXID_TOKEN > NYXID_API_KEY
-  let token = match options.api_key {
-    Some(key) => key
-    None => host_env_var("NYXID_TOKEN").unwrap_or("")
-  }
-  let api_key = host_env_var("NYXID_API_KEY").unwrap_or("")
   let extra_headers = if api_key.length() > 0 && token.length() == 0 {
     Json::object({ "X-API-Key": Json::string(api_key) }).stringify(escape_slash=false)
   } else {
@@ -358,6 +355,63 @@ fn host_mistral_stream(
     let events = @ai.parse_openai_sse_line("data: [DONE]", state)
     for event in events {
       handler.0(event)
+    }
+  }
+}
+
+///| 解析 NyxID 认证信息：返回 (base_url, bearer_token, api_key)。
+fn resolve_nyxid_auth(model : @ai.Model, options : @ai.StreamOptions) -> (String, String, String) {
+  // 优先级 1: options.api_key as Bearer
+  match options.api_key {
+    Some(key) if key.length() > 0 => {
+      let base = match model.base_url {
+        Some(url) => url
+        None => host_env_var("NYXID_BASE_URL").unwrap_or("https://nyx.chrono-ai.fun")
+      }
+      return (base, key, "")
+    }
+    _ => ()
+  }
+  // 优先级 2: NYXID_TOKEN env
+  let env_token = host_env_var("NYXID_TOKEN").unwrap_or("")
+  if env_token.length() > 0 {
+    let base = match model.base_url {
+      Some(url) => url
+      None => host_env_var("NYXID_BASE_URL").unwrap_or("https://nyx.chrono-ai.fun")
+    }
+    return (base, env_token, "")
+  }
+  // 优先级 3: NYXID_API_KEY env
+  let env_api_key = host_env_var("NYXID_API_KEY").unwrap_or("")
+  if env_api_key.length() > 0 {
+    let base = match model.base_url {
+      Some(url) => url
+      None => host_env_var("NYXID_BASE_URL").unwrap_or("https://nyx.chrono-ai.fun")
+    }
+    return (base, "", env_api_key)
+  }
+  // 优先级 4: stored credentials file
+  let home = host_env_var("HOME").unwrap_or(".")
+  let creds_path = if home.has_suffix("/") {
+    home + ".pimbt/nyxid-credentials.json"
+  } else {
+    home + "/.pimbt/nyxid-credentials.json"
+  }
+  match host_read_text(creds_path) {
+    Ok(text) => {
+      let json = try { @json.parse(text) } catch { _ => return ("https://nyx.chrono-ai.fun", "", "") }
+      match @ai.parse_nyxid_stored_credentials(json) {
+        Ok(stored) => (stored.base_url, stored.credentials.access_token, "")
+        Err(_) => ("https://nyx.chrono-ai.fun", "", "")
+      }
+    }
+    Err(_) => {
+      // Fallback: model.base_url or default, no auth
+      let base = match model.base_url {
+        Some(url) => url
+        None => "https://nyx.chrono-ai.fun"
+      }
+      (base, "", "")
     }
   }
 }
