@@ -1,37 +1,39 @@
 # pi-moonbit
 
-用 [MoonBit](https://www.moonbitlang.com/) 语言从零重建 [pi-mono](https://github.com/badlogic/pi-mono) —— 一个 AI 编程助手工具包。CLI 命令名 `pimbt`。
+A MoonBit reimplementation of [pi-mono](https://github.com/badlogic/pi-mono) — an AI coding agent toolkit. The CLI binary is `pimbt`.
 
-## 这是什么？
+> 中文版：[README.zh-CN.md](README.zh-CN.md)
 
-pi-mono 是 libGDX 作者 Mario Zechner 用 TypeScript 写的 AI Agent 工具包。pi-moonbit 是它的 MoonBit 重写版，目的是：
+## What is this?
 
-- **学 MoonBit** —— 通过造一个真实项目，掌握类型系统、trait、泛型、模式匹配等特性
-- **学架构** —— 逐包拆解重建，理解 AI Agent 从底层 LLM 调用到上层交互界面的完整设计
+pi-mono is an AI agent toolkit written in TypeScript by Mario Zechner (creator of libGDX). pi-moonbit is a from-scratch rewrite in MoonBit, aimed at:
 
-## 当前进度
+- **Learning MoonBit** — building a real project to exercise its type system, traits, generics, and pattern matching.
+- **Learning the architecture** — rebuilding each package top to bottom to understand how an AI agent is structured from the LLM API layer up to the interactive UI.
 
-**26 个规划 issue 全部完成**，323 个测试通过，~30K 行 MoonBit 代码。
+## Current status
 
-| 包 | 状态 | 说明 |
+**All 26 planned issues closed.** 343 tests passing. ~30K lines of MoonBit.
+
+| Package | Status | Notes |
 |---|---|---|
-| `lib/ai` | ✅ 完整 | 7 个 LLM Provider (OpenAI/Anthropic/Mistral/Gemini/Bedrock/Vertex/Azure)、NyxID gateway、OAuth + PKCE 基础设施、env-api-keys、model registry、overflow 检测 |
-| `lib/tui` | ✅ 完整 | Component trait、差分渲染、组件库（Input/SelectList/Loader/Box/Container）、Markdown 渲染、fuzzy 搜索、autocomplete、undo stack |
-| `lib/agent` | ✅ 完整 | Agent 引擎：回合循环、工具三阶段执行、事件系统、steering/follow-up 队列 |
-| `lib/coding_agent` | ✅ 完整 | 会话树、compaction、扩展系统、6 内置工具、slash commands、skills、HTML export、path/mime/git/frontmatter 工具 |
-| `src/main` (pimbt CLI) | ✅ 完整 | 3 模式 (Print/Interactive/RPC)、多 target (JS/Native/WASM)、主题系统、**NyxID OAuth 登录 + 自动 token 刷新** |
-| `lib/web_ui` | ✅ 完整 | Web transcript、storage、6 dialogs、12 artifact 类型、tool renderers、IndexedDB backend 接口 |
-| `lib/mom` | ✅ 完整 | 平台无关 channel 模型、Slack 适配器、事件循环/定时器/watcher/host driver |
-| `lib/pods` | ✅ 完整 | PodRegistry、SSH/SCP 命令构建、vLLM 部署命令 |
+| `lib/ai` | ✅ complete | 7 LLM providers (OpenAI / Anthropic / Mistral / Gemini / Bedrock / Vertex / Azure), NyxID gateway, OAuth + PKCE primitives, env-api-keys, model registry, overflow detection |
+| `lib/tui` | ✅ complete | `Component` trait, diff rendering, component library (Input / SelectList / Loader / Box / Container), Markdown rendering, fuzzy search, autocomplete, undo stack |
+| `lib/agent` | ✅ complete | Agent engine: turn loop, three-phase tool execution, event system, steering / follow-up queues |
+| `lib/coding_agent` | ✅ complete | Session tree, compaction, extension system, 6 built-in tools, slash commands, skills, HTML export, path / mime / git / frontmatter utilities |
+| `lib/cli` (→ `pimbt`) | ✅ complete | 3 modes (Print / Interactive / RPC), multi-target (JS / Native / WASM), theme system, **NyxID login + auto token refresh + providers management** |
+| `lib/web_ui` | ✅ complete | Web transcript, storage, 6 dialogs, 12 artifact types, tool renderers, IndexedDB backend interface |
+| `lib/mom` | ✅ complete | Platform-neutral channel model, Slack adapter, event loop / timer / watcher / host driver |
+| `lib/pods` | ✅ complete | `PodRegistry`, SSH/SCP command builders, vLLM deployment commands |
 
-## 安装
+## Install
 
-### 前置要求
+### Prerequisites
 
-- [MoonBit 工具链](https://www.moonbitlang.com/download/)
-- Node.js 18+（pimbt 目前在 JS target 下运行）
+- [MoonBit toolchain](https://www.moonbitlang.com/download/)
+- Node.js 18+ (pimbt runs on the JS target)
 
-### 一键安装
+### One-liner
 
 ```bash
 git clone https://github.com/eanzhao/pi-moonbit.git
@@ -39,83 +41,66 @@ cd pi-moonbit
 ./scripts/install.sh
 ```
 
-默认安装到 `~/.local/bin/pimbt`（把 `~/.local/bin` 加到 PATH 即可用）。
+Installs to `~/.local/bin/pimbt` by default. Add `~/.local/bin` to your `PATH` and you're set.
 
-其他选项：
+Other options:
 
 ```bash
-PREFIX=/usr/local ./scripts/install.sh   # 系统级安装（可能需要 sudo）
-./scripts/install.sh --symlink           # 开发模式：symlink main.js，重新 moon build 后自动生效
-./scripts/install.sh --uninstall         # 卸载
+PREFIX=/usr/local ./scripts/install.sh   # system-wide install (may need sudo)
+./scripts/install.sh --symlink           # dev mode: symlink main.js so moon build updates it live
+./scripts/install.sh --uninstall         # remove pimbt
 ```
 
-安装后：
+After install:
 
 ```bash
 pimbt --help
-pimbt login                              # 浏览器登录 NyxID
-pimbt providers connect openai           # 添加 LLM key
+pimbt login                              # browser-based NyxID login
+pimbt providers connect openai           # paste an LLM API key
 pimbt --api nyxid-gateway --model gpt-4o "hello"
 ```
 
-### 开发者命令
+## Using pimbt with NyxID (recommended)
+
+[NyxID](https://nyx.chrono-ai.fun) is a credential-brokering LLM gateway. You store your LLM provider keys (OpenAI / Anthropic / Gemini / Mistral / ...) once in NyxID's panel; pimbt authenticates with NyxID over OAuth and proxies every LLM call through the gateway. **pimbt never sees raw LLM API keys.**
+
+Benefits:
+
+- One login, use every provider you've configured on NyxID.
+- Keys sit server-side — easier to rotate or revoke.
+- Works across devices — no `export OPENAI_API_KEY=...` sprinkled everywhere.
+
+### Register on NyxID
+
+NyxID currently requires an invite code:
+
+- Register at <https://nyx.chrono-ai.fun/register>
+- Invite code: `NYX-S6SBEA4X` (20 seats, first-come)
+
+### First-run flow
 
 ```bash
-moon check          # 类型检查
-moon build          # 编译
-moon test           # 运行全部测试
-moon test lib/ai    # 运行某个包的测试
-
-# 不走 install 直接运行
-moon run src/main --target js -- --help
-```
-
-## NyxID 集成（推荐用法）
-
-[NyxID](https://nyx.chrono-ai.fun) 是一个**凭证代理 + LLM 网关**：你在 NyxID 面板上统一管理各家 LLM 的 API key（OpenAI / Anthropic / Gemini / Mistral 等），pimbt 通过 NyxID OAuth 登录后，调用 LLM 时由 NyxID 服务端根据 model id 自动路由到对应 provider 并注入凭证——pimbt 本地**不接触任何 LLM API key**。
-
-好处：
-- 一次登录，用遍所有已在 NyxID 配好的 provider
-- key 泄露风险集中在 NyxID 服务端（轮换、吊销更容易）
-- 可以多设备同步，无需到处 `export OPENAI_API_KEY=...`
-
-### 注册 NyxID 账号
-
-NyxID 目前**需要邀请码**才能注册：
-
-- 注册入口：<https://nyx.chrono-ai.fun/register>
-- 邀请码：`NYX-S6SBEA4X`（共 20 个名额，先到先得）
-
-### 在 NyxID 配置 OAuth 应用和 LLM Provider
-
-登录 NyxID 面板后，做两件事：
-
-1. **创建一个 OAuth 应用**（Public client，使用 PKCE，无需 client secret），记下 `client_id`。回调地址填 `http://localhost:54545/callback`（默认端口，可用 `--port` 改）。
-2. **在 "LLM Providers" 页添加你要用的服务商**，把对应 API key 贴进去（OpenAI、Anthropic、Gemini、Mistral 都支持）。
-
-### 用 pimbt 登录并使用
-
-```bash
-# 一次性登录（自动打开浏览器，OAuth 2.0 + PKCE/S256）
-pimbt login --client-id <your-nyxid-client-id>
-# 或用环境变量代替 --client-id
-export NYXID_CLIENT_ID=<your-nyxid-client-id>
+# 1. Browser-based login (no client_id needed — uses NyxID's CLI auth flow)
 pimbt login
 
-# 凭证保存到 ~/.pimbt/nyxid-credentials.json
-# 之后直接用，access token 过期前 60s 会自动 refresh
-# 若 refresh_token 被 NyxID 吊销，pimbt 会清晰报错要求重新登录
+# 2. Self-check shows whether you have any providers configured. If not:
+pimbt providers connect openai       # prompts for your sk-... key
+pimbt providers connect anthropic    # or: --api-key sk-ant-... to skip the prompt
 
-# 看看哪些 provider 已连接、支持哪些 model id
-pimbt models
+# 3. Inspect what's connected
+pimbt providers list
+pimbt models                         # full provider + model-id listing
 
+# 4. Talk to a model — NyxID routes by model id automatically
 pimbt --api nyxid-gateway --model gpt-4o "write a fib function"
 pimbt --api nyxid-gateway --model claude-sonnet-4-5-20250929 "explain quicksort"
 ```
 
-`--model` 可以填任何你在 NyxID 上配过 provider 的模型 id，pimbt 这边没有写死白名单。
+`--model` accepts any model id NyxID knows about for a provider you've connected. pimbt does not hard-code a model whitelist.
 
-## 直连 Provider
+## Using pimbt with direct provider keys
+
+If you'd rather skip NyxID and manage keys yourself:
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -126,39 +111,62 @@ pimbt --api anthropic-messages --model claude-sonnet-4-5 "hello"
 
 export GOOGLE_API_KEY=...
 pimbt --api google-generativeai --model gemini-2.0-flash "hello"
+
+export MISTRAL_API_KEY=...
+pimbt --api mistral-conversation --model mistral-large-latest "hello"
 ```
 
-## 项目结构
+## Developer commands
+
+```bash
+moon check          # type check
+moon build          # compile
+moon test           # run all tests
+moon test lib/ai    # run tests for one package
+
+# Run the CLI without installing
+moon run src/main --target js -- --help
+```
+
+## Project layout
 
 ```
 pi-moonbit/
-├── moon.mod.json          # 模块定义
-├── docs/                  # 架构文档（每阶段一篇）
+├── moon.mod.json
+├── docs/                  # design docs, one per phase
 ├── lib/
-│   ├── ai/                # Phase 01 — LLM Provider 抽象层
-│   ├── tui/               # Phase 02 — 终端 UI 库
-│   ├── agent/             # Phase 03 — Agent 循环引擎
-│   ├── coding_agent/      # Phase 04 — 编码助手核心
-│   ├── web_ui/            # Phase 06 — Web UI 支撑层
-│   ├── mom/               # Phase 07 — Mom 运行层
-│   └── pods/              # GPU Pod 管理
-├── src/main/              # Phase 05 — pimbt CLI 入口
-└── pi-mono/               # 原始 TS 实现（只读参考，gitignored）
+│   ├── ai/                # Phase 01 — LLM provider abstraction
+│   ├── tui/               # Phase 02 — terminal UI library
+│   ├── agent/             # Phase 03 — agent loop engine
+│   ├── coding_agent/      # Phase 04 — coding-agent core
+│   ├── web_ui/            # Phase 06 — web UI support layer
+│   ├── mom/               # Phase 07 — mom runtime
+│   ├── pods/              # GPU pod management
+│   └── cli/               # Phase 05 — pimbt CLI implementation
+├── src/main/              # pimbt entry point (thin shell over lib/cli)
+├── scripts/install.sh     # local installer
+└── pi-mono/               # original TypeScript reference (gitignored, read-only)
 ```
 
-## 架构文档
+## Architecture docs
 
-- [00 - 项目总览](docs/00-project-overview.md) — 架构分析与实现计划
-- [01 - LLM API 层](docs/01-ai.md) — 消息、模型、Provider、流式事件
-- [02 - 终端 UI 层](docs/02-tui.md) — 组件系统、差分渲染、键盘输入
-- [03 - Agent 引擎](docs/03-agent.md) — 回合循环、工具执行、事件与状态
-- [04 - Coding Agent](docs/04-coding-agent.md) — 会话管理、扩展系统、内置工具
-- [05 - CLI 入口](docs/05-cli.md) — 参数解析、多 session JSONL、continue/resume、REPL
-- [06 - Web UI 支撑层](docs/06-web-ui.md) — Web transcript、storage、artifacts、tool renderers
-- [07 - Mom 运行层](docs/07-mom.md) — 统一 channel 模型、Slack 适配器
+Each phase has a design doc explaining what was built, why, and how it differs from pi-mono:
 
-## 参考
+- [00 — Project overview](docs/00-project-overview.md) — architecture analysis and implementation plan
+- [01 — LLM API layer](docs/01-ai.md) — messages, models, providers, streaming events
+- [02 — Terminal UI](docs/02-tui.md) — component system, diff rendering, keyboard input
+- [03 — Agent engine](docs/03-agent.md) — turn loop, tool execution, events and state
+- [04 — Coding agent](docs/04-coding-agent.md) — session management, extension system, built-in tools
+- [05 — CLI entry](docs/05-cli.md) — arg parsing, multi-session JSONL, continue/resume, REPL
+- [06 — Web UI support](docs/06-web-ui.md) — web transcript, storage, artifacts, tool renderers
+- [07 — Mom runtime](docs/07-mom.md) — unified channel model, Slack adapter
 
-- [pi-mono](https://github.com/badlogic/pi-mono) — 原始 TypeScript 实现
-- [NyxID](https://github.com/eanzhao/NyxID) — 凭证代理 / OAuth IdP
-- [MoonBit 文档](https://docs.moonbitlang.com/) — 语言参考
+## References
+
+- [pi-mono](https://github.com/badlogic/pi-mono) — original TypeScript implementation
+- [NyxID](https://github.com/eanzhao/NyxID) — credential broker / OAuth IdP
+- [MoonBit docs](https://docs.moonbitlang.com/) — language reference
+
+## License
+
+MIT

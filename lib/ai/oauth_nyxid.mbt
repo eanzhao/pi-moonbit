@@ -53,18 +53,20 @@ pub fn parse_nyxid_public_config(response : Json) -> Result[String, String] {
 ///| NyxID CLI 流程的直接 token 响应（从 callback 参数构建）。
 ///
 /// 与标准 OAuth token 响应的区别：
-/// - 没有 expires_in（CLI flow 默认 token 生命周期由服务端决定）
+/// - 没有 expires_in（CLI flow 的 token 生命周期由服务端决定，客户端不猜）
 /// - 没有 id_token
+///
+/// 故意不设 expires_at，这样自动 refresh 逻辑不会触发；当服务端返回 401
+/// 时由消费方提示用户重新登录即可。
 pub fn nyxid_cli_credentials_from_callback(
   access_token : String,
   refresh_token : String?,
-  now_epoch_seconds : Int64,
-  assumed_ttl_seconds? : Int = 900  // 15 min default
+  _now_epoch_seconds : Int64
 ) -> OAuthCredentials {
   {
     access_token,
     refresh_token,
-    expires_at: Some(now_epoch_seconds + assumed_ttl_seconds.to_int64()),
+    expires_at: None,
     token_type: "Bearer",
     extra: None,
   }

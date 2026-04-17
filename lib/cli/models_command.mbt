@@ -137,9 +137,14 @@ pub fn format_llm_status(json : Json) -> String {
 fn format_provider(p : Json) -> String {
   match p {
     Object(fields) => {
-      let name = match fields.get("name") {
+      // NyxID's LlmProviderStatus uses provider_slug + provider_name, not "name".
+      let slug = match fields.get("provider_slug") {
         Some(String(s)) => s
         _ => "(unknown)"
+      }
+      let display_name = match fields.get("provider_name") {
+        Some(String(s)) => s
+        _ => slug
       }
       let status = match fields.get("status") {
         Some(String(s)) => s
@@ -151,7 +156,8 @@ fn format_provider(p : Json) -> String {
         "not_connected" => ("—", @tui.ansi_dim() + status + @tui.ansi_reset())
         _ => ("·", status)
       }
-      icon + " " + name + " " + @tui.ansi_dim() + "(" + @tui.ansi_reset() + colored_status + @tui.ansi_dim() + ")" + @tui.ansi_reset()
+      let label = if display_name == slug { slug } else { display_name + " (" + slug + ")" }
+      icon + " " + label + " " + @tui.ansi_dim() + "[" + @tui.ansi_reset() + colored_status + @tui.ansi_dim() + "]" + @tui.ansi_reset()
     }
     _ => "(malformed provider entry)"
   }

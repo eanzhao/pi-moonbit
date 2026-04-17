@@ -177,17 +177,14 @@ test "parse_nyxid_public_config handles missing frontend_url" {
   assert_true(parse_nyxid_public_config(json) is Err(_))
 }
 
-test "nyxid_cli_credentials_from_callback builds OAuthCredentials" {
+test "nyxid_cli_credentials_from_callback builds OAuthCredentials without expiry" {
   let creds = nyxid_cli_credentials_from_callback("access-xyz", Some("refresh-xyz"), 1000L)
   assert_eq(creds.access_token, "access-xyz")
   assert_eq(creds.refresh_token, Some("refresh-xyz"))
   assert_eq(creds.token_type, "Bearer")
-  assert_eq(creds.expires_at, Some(1900L))  // 1000 + 900 default
-}
-
-test "nyxid_cli_credentials with custom ttl" {
-  let creds = nyxid_cli_credentials_from_callback("t", None, 0L, assumed_ttl_seconds=3600)
-  assert_eq(creds.expires_at, Some(3600L))
+  // CLI flow never knows the real TTL; leave expires_at unset so we never
+  // trigger a refresh on an empty client_id. Server 401 is the real signal.
+  assert_eq(creds.expires_at, None)
 }
 
 test "refresh response without refresh_token preserves original" {

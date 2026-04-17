@@ -161,9 +161,10 @@ fn show_post_login_status(base_url : String, bearer : String, runtime : CliHostR
         Ok(s) => s
         Err(_) => return
       }
+      // /api/v1/llm/status returns "ready" | "expired" | "not_connected".
       let connected : Array[@ai.LlmProviderStatus] = []
       for p in parsed.providers {
-        if p.status == "connected" || p.status == "ready" {
+        if p.status == "ready" {
           connected.push(p)
         }
       }

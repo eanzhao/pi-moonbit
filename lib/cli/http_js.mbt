@@ -461,6 +461,12 @@ fn try_refresh_nyxid_token(
     Some(rt) if rt.length() > 0 => rt
     _ => return Err("no refresh_token stored")
   }
+  // CLI login flow doesn't register an OAuth client, so it can't refresh via
+  // /oauth/token (which requires a valid client_id). Skip refresh — the next
+  // authenticated call will get a 401 and the user will re-run `pimbt login`.
+  if stored.client_id.length() == 0 {
+    return Err("CLI-flow credentials cannot be refreshed; run `pimbt login` again")
+  }
   let form = @ai.build_nyxid_refresh_form(refresh_token, stored.client_id, None)
   let form_body = @ai.encode_form(form)
   let token_url = nyxid_trim_slash(stored.base_url) + @ai.nyxid_oauth_token_path

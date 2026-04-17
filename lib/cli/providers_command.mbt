@@ -96,9 +96,11 @@ fn format_user_tokens(tokens : Array[@ai.UserToken]) -> String {
     return sb.to_string()
   }
   for token in tokens {
+    // NyxID's /providers/my-tokens returns "active" | "expired" | "pending".
     let (icon, colored_status) = match token.status {
-      "connected" => ("✓", @tui.ansi_green() + token.status + @tui.ansi_reset())
+      "active" => ("✓", @tui.ansi_green() + token.status + @tui.ansi_reset())
       "expired" => ("⚠", @tui.ansi_yellow() + token.status + @tui.ansi_reset())
+      "pending" => ("⋯", @tui.ansi_yellow() + token.status + @tui.ansi_reset())
       _ => ("·", token.status)
     }
     let label_part = match token.label {

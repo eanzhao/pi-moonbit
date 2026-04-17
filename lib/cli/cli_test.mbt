@@ -478,8 +478,16 @@ test "parse_cli_args models respects --base-url and --bearer" {
 test "format_llm_status renders providers and supported models" {
   let response = Json::object({
     "providers": Json::array([
-      Json::object({ "name": Json::string("openai"), "status": Json::string("ready") }),
-      Json::object({ "name": Json::string("anthropic"), "status": Json::string("not_connected") }),
+      Json::object({
+        "provider_slug": Json::string("openai"),
+        "provider_name": Json::string("OpenAI"),
+        "status": Json::string("ready"),
+      }),
+      Json::object({
+        "provider_slug": Json::string("anthropic"),
+        "provider_name": Json::string("Anthropic"),
+        "status": Json::string("not_connected"),
+      }),
     ]),
     "gateway_url": Json::string("https://nyx.example.com/api/v1/llm/gateway"),
     "supported_models": Json::array([

@@ -1,10 +1,10 @@
 {
   "name": "eanzhao/pi-moonbit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "readme": "README.md",
   "license": "MIT",
-  "keywords": ["ai", "agent", "llm", "coding-agent"],
-  "description": "MoonBit reimplementation of pi-mono: AI agent toolkit with unified LLM API, agent runtime, TUI, and coding agent CLI",
+  "keywords": ["ai", "agent", "llm", "coding-agent", "nyxid", "oauth", "cli"],
+  "description": "AI coding agent toolkit in MoonBit. Ships the `pimbt` CLI with 7 LLM providers (OpenAI / Anthropic / Gemini / Mistral / Bedrock / Vertex / Azure), a unified streaming abstraction, an agent loop with tool calls and compaction, a session-tree coding agent with built-in tools, three CLI modes (interactive / print / RPC), and one-command NyxID integration for credential-brokered LLM access.",
   "repository": "https://github.com/eanzhao/pi-moonbit",
   "warn-list": "-27"
 }
