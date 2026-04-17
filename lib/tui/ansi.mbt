@@ -1,49 +1,49 @@
 ///| ANSI 转义码常量和终端格式化工具。
 
 ///| 重置所有格式。
-pub fn ansi_reset() -> String { "\x1b[0m" }
+pub fn ansi_reset() -> String { "\u001b[0m" }
 
 ///| 粗体。
-pub fn ansi_bold() -> String { "\x1b[1m" }
+pub fn ansi_bold() -> String { "\u001b[1m" }
 
 ///| 暗淡。
-pub fn ansi_dim() -> String { "\x1b[2m" }
+pub fn ansi_dim() -> String { "\u001b[2m" }
 
 ///| 前景色：红色。
-pub fn ansi_red() -> String { "\x1b[31m" }
+pub fn ansi_red() -> String { "\u001b[31m" }
 
 ///| 前景色：绿色。
-pub fn ansi_green() -> String { "\x1b[32m" }
+pub fn ansi_green() -> String { "\u001b[32m" }
 
 ///| 前景色：黄色。
-pub fn ansi_yellow() -> String { "\x1b[33m" }
+pub fn ansi_yellow() -> String { "\u001b[33m" }
 
 ///| 前景色：蓝色。
-pub fn ansi_blue() -> String { "\x1b[34m" }
+pub fn ansi_blue() -> String { "\u001b[34m" }
 
 ///| 前景色：品红。
-pub fn ansi_magenta() -> String { "\x1b[35m" }
+pub fn ansi_magenta() -> String { "\u001b[35m" }
 
 ///| 前景色：青色。
-pub fn ansi_cyan() -> String { "\x1b[36m" }
+pub fn ansi_cyan() -> String { "\u001b[36m" }
 
 ///| 前景色：白色。
-pub fn ansi_white() -> String { "\x1b[37m" }
+pub fn ansi_white() -> String { "\u001b[37m" }
 
 ///| 前景色：灰色（亮黑）。
-pub fn ansi_gray() -> String { "\x1b[90m" }
+pub fn ansi_gray() -> String { "\u001b[90m" }
 
 ///| 清除当前行。
-pub fn ansi_clear_line() -> String { "\x1b[2K\r" }
+pub fn ansi_clear_line() -> String { "\u001b[2K\r" }
 
 ///| 光标移到行首。
 pub fn ansi_carriage_return() -> String { "\r" }
 
 ///| 隐藏光标。
-pub fn ansi_hide_cursor_seq() -> String { "\x1b[?25l" }
+pub fn ansi_hide_cursor_seq() -> String { "\u001b[?25l" }
 
 ///| 显示光标。
-pub fn ansi_show_cursor_seq() -> String { "\x1b[?25h" }
+pub fn ansi_show_cursor_seq() -> String { "\u001b[?25h" }
 
 ///| 给文本加颜色。
 pub fn ansi_colored(text : String, color : String) -> String {
