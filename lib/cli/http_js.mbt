@@ -243,8 +243,8 @@ fn host_nyxid_stream(
     raise @ai.StreamError("empty response from NyxID")
   }
   if result[0] == "err" {
-    let message = if result.length() > 1 { result[1] } else { "unknown error" }
-    raise @ai.StreamError(message)
+    let raw = if result.length() > 1 { result[1] } else { "unknown error" }
+    raise @ai.StreamError(translate_nyxid_error(raw))
   }
   let state = @ai.OpenAiStreamState::new(model)
   for i = 1; i < result.length(); i = i + 1 {
@@ -259,6 +259,23 @@ fn host_nyxid_stream(
       handler.0(event)
     }
   }
+}
+
+///| Make NyxID gateway errors actionable for end users.
+fn translate_nyxid_error(raw : String) -> String {
+  if raw.contains("HTTP 401") {
+    return "NyxID rejected the token (401). Run `pimbt login` to re-authenticate."
+  }
+  if raw.contains("HTTP 403") {
+    return "NyxID denied the request (403). Check your providers in `pimbt providers list`."
+  }
+  if raw.contains("HTTP 404") {
+    return "NyxID returned 404. The requested model/provider isn't available — try `pimbt models`."
+  }
+  if raw.contains("model_not_found") || raw.contains("Unknown model") {
+    return raw + "\n→ Run `pimbt models` to see what's available, or `pimbt providers connect <slug>` to add a provider."
+  }
+  raw
 }
 
 ///| 发起 OpenAI 兼容的 SSE 流式请求并通过 EventHandler 推送事件。

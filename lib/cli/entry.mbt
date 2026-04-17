@@ -38,6 +38,12 @@ pub fn run_main(argv : Array[String]) -> Unit {
         exit_process(exit_code)
       }
     }
+    Ok(CliParseResult::Setup(config)) => {
+      let exit_code = run_setup_command(config, runtime)
+      if exit_code != 0 {
+        exit_process(exit_code)
+      }
+    }
     Err(message) => {
       (runtime.stderr_write)(message + "\n")
       exit_process(1)

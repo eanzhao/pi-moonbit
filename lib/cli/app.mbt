@@ -80,18 +80,64 @@ fn create_cli_app(
 }
 
 pub fn run_cli(config : CliConfig, runtime : CliHostRuntime) -> Int {
-  match create_cli_app(config, runtime) {
+  // Pre-flight: when using NyxID gateway with no real model set, walk the user
+  // through model selection (or remind them to run `pimbt setup`).
+  let resolved_config = match preflight_resolve_model(config, runtime) {
+    Ok(c) => c
+    Err(code) => return code
+  }
+  match create_cli_app(resolved_config, runtime) {
     Err(message) => {
       (runtime.stderr_write)(message + "\n")
       1
     }
     Ok(Exit(code)) => code
     Ok(Ready(app)) =>
-      match config.mode {
-        CliMode::Print => run_print_mode(app, config.messages)
-        CliMode::Interactive => run_tui_interactive_mode(app, config.messages)
+      match resolved_config.mode {
+        CliMode::Print => run_print_mode(app, resolved_config.messages)
+        CliMode::Interactive => run_tui_interactive_mode(app, resolved_config.messages)
         CliMode::Rpc => run_rpc_mode(app)
       }
+  }
+}
+
+///| If the user is targeting NyxID but didn't pick a model, do something useful:
+///   - Not logged in → tell them to `pimbt setup` / `pimbt login`
+///   - Logged in but no providers → tell them to `pimbt providers connect <slug>`
+///   - Logged in with providers → fetch supported models, interactive picker
+fn preflight_resolve_model(
+  config : CliConfig,
+  runtime : CliHostRuntime
+) -> Result[CliConfig, Int] {
+  if config.model.api != @ai.api_nyxid_gateway {
+    return Ok(config)
+  }
+  if config.model.id != "mock-cli" && config.model.id.length() > 0 {
+    return Ok(config)
+  }
+  // RPC mode is non-interactive — fail loud rather than block on stdin.
+  if config.mode == CliMode::Rpc {
+    (runtime.stderr_write)(@tui.ansi_error("RPC mode requires --model <id>") + "\n")
+    return Err(2)
+  }
+  let creds_path = credentials_default_path(config.cwd)
+  if !(runtime.file_exists)(creds_path) {
+    (runtime.stdout_write)(
+      @tui.ansi_info("No NyxID credentials found. Run:") + "\n" +
+      "  " + @tui.ansi_bold() + "pimbt setup" + @tui.ansi_reset() + "\n",
+    )
+    return Err(2)
+  }
+  let base_url = host_env_var("NYXID_BASE_URL").unwrap_or(@ai.nyxid_default_base_url)
+  match pick_model_interactive(runtime, base_url, creds_path) {
+    Some(model_id) => {
+      let new_model : @ai.Model = { ..config.model, id: model_id, name: model_id }
+      Ok({ ..config, model: new_model })
+    }
+    None => {
+      (runtime.stderr_write)(@tui.ansi_error("No model selected.") + "\n")
+      Err(2)
+    }
   }
 }
 

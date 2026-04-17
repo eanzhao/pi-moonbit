@@ -24,6 +24,7 @@ pub(all) enum CliParseResult {
   Login(LoginConfig)
   Models(ModelsConfig)
   Providers(ProvidersConfig)
+  Setup(SetupConfig)
 }
 
 pub(all) enum ProvidersAction {

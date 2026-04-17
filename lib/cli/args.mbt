@@ -17,6 +17,9 @@ pub fn parse_cli_args(
   if argv.length() >= 2 && argv[1] == "providers" {
     return parse_providers_args(argv, cwd)
   }
+  if argv.length() >= 2 && argv[1] == "setup" {
+    return parse_setup_args(argv, cwd)
+  }
   let mut mode = CliMode::Interactive
   let mut system_prompt = default_system_prompt()
   let mut session_path_arg : String? = None
@@ -25,11 +28,11 @@ pub fn parse_cli_args(
   let mut continue_session = false
   let mut resume_session = false
   let mut effective_cwd = cwd
-  let mut model_id = "mock-cli"
-  let mut provider_id = "openai"
-  let mut api_id = "openai-responses"
+  let mut model_id_arg : String? = None
+  let mut provider_id_arg : String? = None
+  let mut api_id_arg : String? = None
   let mut base_url : String? = None
-  let mut thinking_level = @agent.AgentThinkingLevel::Off
+  let mut thinking_level_arg : @agent.AgentThinkingLevel? = None
   let messages : Array[String] = []
 
   let mut i = if argv.length() > 0 { 1 } else { 0 }
@@ -77,19 +80,19 @@ pub fn parse_cli_args(
         return Err("missing value for --model")
       }
       i = i + 1
-      model_id = argv[i]
+      model_id_arg = Some(argv[i])
     } else if arg == "--provider" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --provider")
       }
       i = i + 1
-      provider_id = argv[i]
+      provider_id_arg = Some(argv[i])
     } else if arg == "--api" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --api")
       }
       i = i + 1
-      api_id = argv[i]
+      api_id_arg = Some(argv[i])
     } else if arg == "--base-url" {
       guard i + 1 < argv.length() else {
         return Err("missing value for --base-url")
@@ -102,7 +105,7 @@ pub fn parse_cli_args(
       }
       i = i + 1
       match parse_thinking_level(argv[i]) {
-        Some(level) => thinking_level = level
+        Some(level) => thinking_level_arg = Some(level)
         None => return Err("unknown thinking level: " + argv[i])
       }
     } else if arg.has_prefix("-") {
@@ -142,6 +145,51 @@ pub fn parse_cli_args(
     return Err("print mode requires at least one message")
   }
 
+  // Resolve api / model / provider / thinking with this precedence:
+  //   1. explicit CLI flag
+  //   2. ~/.pimbt/config.json (saved preference from `pimbt setup`)
+  //   3. presence of NyxID credentials → default to nyxid-gateway
+  //   4. hard-coded fallback
+  let user_config = load_default_user_config(effective_cwd)
+  let creds_exist = nyxid_credentials_default_exists(effective_cwd)
+
+  let api_id = match api_id_arg {
+    Some(v) => v
+    None =>
+      match user_config.default_api {
+        Some(v) => v
+        None => if creds_exist { "nyxid-gateway" } else { "openai-responses" }
+      }
+  }
+  let provider_id = match provider_id_arg {
+    Some(v) => v
+    None =>
+      match user_config.default_provider {
+        Some(v) => v
+        None => if api_id == "nyxid-gateway" { "nyxid" } else { "openai" }
+      }
+  }
+  let model_id = match model_id_arg {
+    Some(v) => v
+    None =>
+      match user_config.default_model {
+        Some(v) => v
+        None => "mock-cli"
+      }
+  }
+  let thinking_level = match thinking_level_arg {
+    Some(level) => level
+    None =>
+      match user_config.default_thinking {
+        Some(name) =>
+          match parse_thinking_level(name) {
+            Some(level) => level
+            None => @agent.AgentThinkingLevel::Off
+          }
+        None => @agent.AgentThinkingLevel::Off
+      }
+  }
+
   Ok(CliParseResult::Run({
     mode,
     system_prompt,
@@ -157,6 +205,53 @@ pub fn parse_cli_args(
   }))
 }
 
+///| 加载 ~/.pimbt/config.json（不依赖 runtime — args 解析阶段还没构造 runtime）。
+fn load_default_user_config(cwd : String) -> PimbtUserConfig {
+  let home = host_env_var("HOME").unwrap_or(cwd)
+  let path = if home.has_suffix("/") {
+    home + ".pimbt/config.json"
+  } else {
+    home + "/.pimbt/config.json"
+  }
+  match host_read_text(path) {
+    Err(_) => PimbtUserConfig::empty()
+    Ok(text) => {
+      let json = try { @json.parse(text) } catch { _ => return PimbtUserConfig::empty() }
+      match json {
+        Object(obj) => {
+          let get_str = fn(k) {
+            match obj.get(k) {
+              Some(String(s)) if s.length() > 0 => Some(s)
+              _ => None
+            }
+          }
+          {
+            default_api: get_str("default_api"),
+            default_model: get_str("default_model"),
+            default_provider: get_str("default_provider"),
+            default_thinking: get_str("default_thinking"),
+          }
+        }
+        _ => PimbtUserConfig::empty()
+      }
+    }
+  }
+}
+
+///| 检查 ~/.pimbt/nyxid-credentials.json 是否存在（同样不依赖 runtime）。
+fn nyxid_credentials_default_exists(cwd : String) -> Bool {
+  let home = host_env_var("HOME").unwrap_or(cwd)
+  let path = if home.has_suffix("/") {
+    home + ".pimbt/nyxid-credentials.json"
+  } else {
+    home + "/.pimbt/nyxid-credentials.json"
+  }
+  match host_read_text(path) {
+    Ok(_) => true
+    Err(_) => false
+  }
+}
+
 pub fn default_system_prompt() -> String {
   "You are a coding assistant. Be concise, inspect the project state before making changes, and use tools when they materially help."
 }
@@ -167,6 +262,7 @@ pub fn cli_help_text() -> String {
     "",
     "Usage:",
     "  pimbt [options] [messages...]",
+    "  pimbt setup                    # guided wizard: login → connect provider → pick model",
     "  pimbt login                    # OAuth login to NyxID (simplified)",
     "  pimbt providers <action>       # manage LLM provider credentials on NyxID",
     "  pimbt models                   # list providers + models on your NyxID account",
@@ -446,6 +542,48 @@ fn parse_providers_args(argv : Array[String], cwd : String) -> Result[CliParseRe
     api_key,
     label,
   }))
+}
+
+fn parse_setup_args(argv : Array[String], cwd : String) -> Result[CliParseResult, String] {
+  let mut config = SetupConfig::defaults(cwd)
+  config = { ..config, base_url: host_env_var("NYXID_BASE_URL").unwrap_or(config.base_url) }
+  let mut i = 2
+  while i < argv.length() {
+    let arg = argv[i]
+    if arg == "--help" || arg == "-h" {
+      return Ok(CliParseResult::Help(setup_help_text()))
+    } else if arg == "--base-url" {
+      guard i + 1 < argv.length() else { return Err("missing value for --base-url") }
+      i = i + 1
+      config = { ..config, base_url: argv[i] }
+    } else if arg == "--credentials-path" {
+      guard i + 1 < argv.length() else { return Err("missing value for --credentials-path") }
+      i = i + 1
+      config = { ..config, credentials_path: argv[i] }
+    } else if arg.has_prefix("-") {
+      return Err("unknown setup option: " + arg)
+    }
+    i = i + 1
+  }
+  Ok(CliParseResult::Setup(config))
+}
+
+pub fn setup_help_text() -> String {
+  [
+    "pimbt setup - guided setup wizard for NyxID + LLM providers",
+    "",
+    "Walks you through:",
+    "  1. Verifying you're logged in (run `pimbt login` first if not)",
+    "  2. Listing connected LLM providers, or connecting one if none",
+    "  3. Picking a default model so you can later run `pimbt \"...\"` without flags",
+    "",
+    "Usage:",
+    "  pimbt setup [options]",
+    "",
+    "Options:",
+    "  --base-url <url>           NyxID base URL (default: https://nyx.chrono-ai.fun)",
+    "  --credentials-path <path>  Credentials file (default: ~/.pimbt/nyxid-credentials.json)",
+  ].join("\n")
 }
 
 pub fn providers_help_text() -> String {

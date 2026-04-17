@@ -35,7 +35,9 @@ pub fn create_read_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
     name: "read",
     label: "Read",
     description: "Read a text file from the workspace",
-    parameters: tool_parameters(["path"]),
+    parameters: tool_parameters_schema([
+      { name: "path", type_: "string", description: "Workspace-relative or absolute path to the file to read.", required: true },
+    ]),
     prepare_arguments: None,
     validate_arguments: Some(validate_read_arguments),
     execute: fn(_tool_call_id, args, _on_update) {
@@ -64,7 +66,10 @@ pub fn create_write_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
     name: "write",
     label: "Write",
     description: "Create or overwrite a text file in the workspace",
-    parameters: tool_parameters(["path", "content"]),
+    parameters: tool_parameters_schema([
+      { name: "path", type_: "string", description: "File path to write. Parent directories are created as needed.", required: true },
+      { name: "content", type_: "string", description: "Full text content to write. Existing files are overwritten.", required: true },
+    ]),
     prepare_arguments: None,
     validate_arguments: Some(validate_write_arguments),
     execute: fn(_tool_call_id, args, _on_update) {
@@ -93,7 +98,12 @@ pub fn create_edit_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
     name: "edit",
     label: "Edit",
     description: "Replace matching text in a file. Set replace_all to true to replace all occurrences.",
-    parameters: tool_parameters(["path", "old_text", "new_text"]),
+    parameters: tool_parameters_schema([
+      { name: "path", type_: "string", description: "File path to edit.", required: true },
+      { name: "old_text", type_: "string", description: "Exact text to find. Must match a unique substring unless replace_all is true.", required: true },
+      { name: "new_text", type_: "string", description: "Replacement text.", required: true },
+      { name: "replace_all", type_: "boolean", description: "If true, replace every occurrence; otherwise only the first.", required: false },
+    ]),
     prepare_arguments: None,
     validate_arguments: Some(validate_edit_arguments),
     execute: fn(_tool_call_id, args, _on_update) {
@@ -142,7 +152,9 @@ pub fn create_bash_tool(runtime : CommandRuntime) -> @agent.AgentTool {
     name: "bash",
     label: "Bash",
     description: "Run a shell command through the injected command runtime",
-    parameters: tool_parameters(["command"]),
+    parameters: tool_parameters_schema([
+      { name: "command", type_: "string", description: "Shell command to run via the injected command runtime (e.g. `ls -la`).", required: true },
+    ]),
     prepare_arguments: None,
     validate_arguments: Some(validate_bash_arguments),
     execute: fn(_tool_call_id, args, _on_update) {
@@ -183,15 +195,48 @@ fn in_memory_workspace_write(workspace : InMemoryWorkspace, path : String, conte
   workspace.files.push({ path, content })
 }
 
-fn tool_parameters(required : Array[String]) -> Json {
-  let required_json : Array[Json] = []
-  for field in required {
-    required_json.push(Json::string(field))
+///| 工具参数 schema 描述。
+///
+/// `name` — 字段名；`type_` — JSON Schema 类型 ("string"/"boolean"/"integer"...)；
+/// `description` — 给 LLM 看的字段说明；`required` — 是否为必填字段。
+pub(all) struct ToolParam {
+  name : String
+  type_ : String
+  description : String
+  required : Bool
+}
+
+///| 构造 OpenAI / Anthropic / Gemini 都接受的 JSON Schema。
+///
+/// 必须包含 `properties`，否则 OpenAI 在 strict 模式下会拒绝
+/// （error: "object schema missing properties"）。
+fn tool_parameters_schema(params : Array[ToolParam]) -> Json {
+  let properties : Map[String, Json] = {}
+  let required : Array[Json] = []
+  for p in params {
+    properties[p.name] = Json::object({
+      "type": Json::string(p.type_),
+      "description": Json::string(p.description),
+    })
+    if p.required {
+      required.push(Json::string(p.name))
+    }
   }
   Json::object({
     "type": Json::string("object"),
-    "required": Json::array(required_json),
+    "properties": Json::object(properties),
+    "required": Json::array(required),
   })
+}
+
+///| 兼容保留：旧的简化签名，只有 required 字段名，自动按 string 类型生成。
+/// 新代码推荐用 `tool_parameters_schema`。
+fn tool_parameters(required : Array[String]) -> Json {
+  let params : Array[ToolParam] = []
+  for name in required {
+    params.push({ name, type_: "string", description: name, required: true })
+  }
+  tool_parameters_schema(params)
 }
 
 fn validate_read_arguments(args : Json) -> Result[Unit, String] {
@@ -261,7 +306,10 @@ pub fn create_grep_tool(runtime : WorkspaceRuntime) -> @agent.AgentTool {
     name: "grep",
     label: "Grep",
     description: "Search for a text pattern in a file. Returns matching lines with line numbers.",
-    parameters: tool_parameters(["path", "pattern"]),
+    parameters: tool_parameters_schema([
+      { name: "path", type_: "string", description: "File path to search within.", required: true },
+      { name: "pattern", type_: "string", description: "Substring to search for (case-insensitive).", required: true },
+    ]),
     prepare_arguments: None,
     validate_arguments: None,
     execute: fn(_tool_call_id, args, _on_update) {
@@ -314,7 +362,9 @@ pub fn create_ls_tool(command_runtime : CommandRuntime) -> @agent.AgentTool {
     name: "ls",
     label: "List",
     description: "List files and directories. Runs `ls -la` on the given path.",
-    parameters: tool_parameters(["path"]),
+    parameters: tool_parameters_schema([
+      { name: "path", type_: "string", description: "Directory path to list (passed to `ls -la`).", required: true },
+    ]),
     prepare_arguments: None,
     validate_arguments: None,
     execute: fn(_tool_call_id, args, _on_update) {
