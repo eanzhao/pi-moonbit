@@ -1,27 +1,8 @@
 import {
-  "eanzhao/pi-moonbit/lib/ai" @ai,
-  "eanzhao/pi-moonbit/lib/agent" @agent,
-  "eanzhao/pi-moonbit/lib/coding_agent" @coding_agent,
-  "eanzhao/pi-moonbit/lib/tui" @tui,
+  "eanzhao/pi-moonbit/lib/cli" @cli,
   "moonbitlang/core/env" @env,
-  "moonbitlang/core/json" @json,
-  "moonbitlang/core/string" @string,
 }
 
 options(
   "is-main": true,
-  targets: {
-    "host_js.mbt": [ "js" ],
-    "host_native.mbt": [ "native", "llvm" ],
-    "host_wasm.mbt": [ "wasm", "wasm-gc" ],
-    "http_js.mbt": [ "js" ],
-    "http_native.mbt": [ "native", "llvm" ],
-    "http_wasm.mbt": [ "wasm", "wasm-gc" ],
-    "crypto_js.mbt": [ "js" ],
-    "crypto_native.mbt": [ "native", "llvm" ],
-    "crypto_wasm.mbt": [ "wasm", "wasm-gc" ],
-    "oauth_server_js.mbt": [ "js" ],
-    "oauth_server_native.mbt": [ "native", "llvm" ],
-    "oauth_server_wasm.mbt": [ "wasm", "wasm-gc" ],
-  },
 )

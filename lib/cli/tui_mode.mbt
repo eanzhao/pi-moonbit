@@ -145,7 +145,7 @@ fn handle_tui_repl_command(
 
 // --- Streaming Display ---
 
-struct StreamingDisplay {
+priv struct StreamingDisplay {
   write : (String) -> Unit
   mut streaming : Bool
   mut had_error : Bool
