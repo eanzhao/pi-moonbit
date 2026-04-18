@@ -34,6 +34,85 @@ pub fn fetch_provider_models(
   }
 }
 
+///| 取一个用户自注册 service 的真实 model id 列表（走 `/api/v1/proxy/s/<slug>`）。
+///
+/// NyxID 的 `/api/v1/proxy/s/<slug>/<path>` 会把 `<path>` 透传到 service 的
+/// `endpoint_url`，并注入注册时配好的凭证。对 OpenAI 兼容的上游（Ollama、MLX、
+/// SiliconFlow、Mimo 等）直接打 `/models` 就能拿到真实 id。
+///
+/// 非 OpenAI 兼容的 service 会返回错误 / 空结果，这里**安静地**返回 `[]`，
+/// 让上层决定是跳过还是提示用户手动输入。
+pub fn fetch_user_service_models(
+  base_url : String,
+  bearer : String,
+  service : @ai.NyxidUserService
+) -> Array[String] {
+  if !is_user_service_llm_compatible(service) {
+    return []
+  }
+  let url = trim_slash_right(base_url) +
+    @ai.nyxid_user_service_proxy_path(service.slug) + "/models"
+  match host_get_bearer(url, bearer) {
+    Ok((status, body)) if status < 400 => parse_models_response(body)
+    _ => []
+  }
+}
+
+///| 粗过滤：判断一个 user service 是否像 OpenAI 兼容的 LLM。
+///
+/// 规则：
+/// - SSH / 非 HTTP 服务：否
+/// - `auth_method == "token_exchange"`：否（OAuth 类上游如 Lark，不是 OpenAI 形态）
+/// - 未 active：否
+///
+/// 过滤掉这些之后剩下的虽然不保证都能拿到模型列表，但至少值得尝试一次
+/// `/models`。fetch 失败时调用方负责兜底。
+pub fn is_user_service_llm_compatible(service : @ai.NyxidUserService) -> Bool {
+  if !service.active { return false }
+  if service.service_type != "http" { return false }
+  if service.auth_method == "token_exchange" { return false }
+  true
+}
+
+///| 统一的模型来源 — 内建 provider（走 `/llm/<slug>/v1`）或用户 service
+/// （走 `/proxy/s/<slug>`）。两路最终都能 fan-out 成真实 model id 列表。
+pub(all) enum ModelSource {
+  BuiltinProvider(@ai.LlmProviderStatus)
+  UserService(@ai.NyxidUserService)
+} derive(Show, Eq)
+
+///| 取 ModelSource 的展示标签（picker/列表用）。
+pub fn model_source_label(src : ModelSource) -> String {
+  match src {
+    BuiltinProvider(p) =>
+      if p.provider_name == p.provider_slug {
+        p.provider_slug
+      } else {
+        p.provider_name + "  (" + p.provider_slug + ")"
+      }
+    UserService(s) =>
+      if s.label == s.slug {
+        s.slug
+      } else {
+        s.label + "  (" + s.slug + ")"
+      }
+  }
+}
+
+///| 从 ModelSource 拉模型列表：内建走 `fetch_provider_models`，user service
+/// 走 `fetch_user_service_models`。
+pub fn fetch_models_for_source(
+  base_url : String,
+  bearer : String,
+  src : ModelSource
+) -> Array[String] {
+  match src {
+    BuiltinProvider(p) =>
+      fetch_provider_models(p.proxy_url, bearer, p.provider_slug)
+    UserService(s) => fetch_user_service_models(base_url, bearer, s)
+  }
+}
+
 ///| 解析 OpenAI 风格 `{data:[{id}]}` 或 Codex 风格 `{models:[{slug}]}`。
 fn parse_models_response(body : String) -> Array[String] {
   let json = try @json.parse(body) catch {
@@ -68,12 +147,17 @@ fn parse_models_response(body : String) -> Array[String] {
         for item in items {
           match item {
             Object(o) => {
+              // Try in order: slug (Codex) → id → name (Ollama /api/tags shape).
               let picked = match o.get("slug") {
                 Some(String(s)) => Some(s)
                 _ =>
                   match o.get("id") {
                     Some(String(s)) => Some(s)
-                    _ => None
+                    _ =>
+                      match o.get("name") {
+                        Some(String(s)) => Some(s)
+                        _ => None
+                      }
                   }
               }
               match picked {

@@ -49,39 +49,118 @@ fn resolve_nyxid_bearer(
 fn run_providers_list(base_url : String, bearer : String, runtime : CliHostRuntime) -> Int {
   let write_out = runtime.stdout_write
   let write_err = runtime.stderr_write
-  let url = trim_slash_right(base_url) + @ai.nyxid_my_tokens_path
-  match host_get_bearer(url, bearer) {
+
+  // /providers/my-tokens — built-in LLM provider bindings (OpenAI / Anthropic / ...).
+  let tokens_url = trim_slash_right(base_url) + @ai.nyxid_my_tokens_path
+  let (status, body) : (Int, String) = match host_get_bearer(tokens_url, bearer) {
+    Ok((s, b)) => (s, b)
     Err(msg) => {
       write_err(@tui.ansi_error("request failed: " + msg) + "\n")
-      1
-    }
-    Ok((status, body)) => {
-      if status == 401 {
-        write_err(@tui.ansi_error("NyxID rejected the token (401). Run `pimbt login` to re-authenticate.") + "\n")
-        return 3
-      }
-      if status >= 400 {
-        write_err(@tui.ansi_error("HTTP " + status.to_string() + " from NyxID:\n" + body) + "\n")
-        return 1
-      }
-      let json = try { @json.parse(body) } catch {
-        _ => {
-          write_err(@tui.ansi_error("response is not valid JSON:\n" + body) + "\n")
-          return 1
-        }
-      }
-      match @ai.parse_nyxid_user_tokens(json) {
-        Err(msg) => {
-          write_err(@tui.ansi_error(msg) + "\n")
-          1
-        }
-        Ok(tokens) => {
-          write_out(format_user_tokens(tokens))
-          0
-        }
-      }
+      return 1
     }
   }
+  if status == 401 {
+    write_err(
+      @tui.ansi_error(
+        "NyxID rejected the token (401). Run `pimbt login` to re-authenticate.",
+      ) + "\n",
+    )
+    return 3
+  }
+  if status >= 400 {
+    write_err(@tui.ansi_error("HTTP " + status.to_string() + " from NyxID:\n" + body) + "\n")
+    return 1
+  }
+  let json = try @json.parse(body) catch {
+    _ => {
+      write_err(@tui.ansi_error("response is not valid JSON:\n" + body) + "\n")
+      return 1
+    }
+  } noraise {
+    v => v
+  }
+  let tokens = match @ai.parse_nyxid_user_tokens(json) {
+    Ok(t) => t
+    Err(msg) => {
+      write_err(@tui.ansi_error(msg) + "\n")
+      return 1
+    }
+  }
+
+  // /keys — user-registered proxy services (Ollama / MLX / Mimo / ...).
+  // Failure non-fatal (older NyxID may not have this endpoint).
+  let keys_url = trim_slash_right(base_url) + @ai.nyxid_keys_path
+  let user_services = fetch_user_services_silent(keys_url, bearer)
+
+  write_out(format_user_tokens(tokens))
+  write_out(format_user_services(user_services))
+  0
+}
+
+fn fetch_user_services_silent(
+  keys_url : String,
+  bearer : String
+) -> Array[@ai.NyxidUserService] {
+  let (status, body) = match host_get_bearer(keys_url, bearer) {
+    Ok(r) => r
+    Err(_) => return []
+  }
+  if status >= 400 { return [] }
+  let json = try @json.parse(body) catch {
+    _ => return []
+  } noraise {
+    v => v
+  }
+  match @ai.parse_nyxid_keys(json) {
+    Ok(list) => {
+      let out : Array[@ai.NyxidUserService] = []
+      for s in list {
+        if s.active && s.service_type == "http" {
+          out.push(s)
+        }
+      }
+      out
+    }
+    Err(_) => []
+  }
+}
+
+fn format_user_services(services : Array[@ai.NyxidUserService]) -> String {
+  let sb = StringBuilder::new()
+  sb.write_string("\n")
+  sb.write_string(@tui.ansi_section_header("User-registered Services") + "\n")
+  if services.length() == 0 {
+    sb.write_string(
+      "  " + @tui.ansi_dim() +
+      "(none — register one via `nyxid service add <slug>` on the NyxID CLI)" +
+      @tui.ansi_reset() + "\n",
+    )
+    return sb.to_string()
+  }
+  for s in services {
+    let (icon, colored_status) = match s.status {
+      "active" => ("✓", @tui.ansi_green() + s.status + @tui.ansi_reset())
+      "expired" => ("⚠", @tui.ansi_yellow() + s.status + @tui.ansi_reset())
+      "pending" => ("⋯", @tui.ansi_yellow() + s.status + @tui.ansi_reset())
+      _ => ("·", s.status)
+    }
+    let label_part = if s.label == s.slug {
+      ""
+    } else {
+      " " + @tui.ansi_dim() + "\"" + s.label + "\"" + @tui.ansi_reset()
+    }
+    let url_part = if s.endpoint_url.length() > 0 {
+      "  " + @tui.ansi_dim() + s.endpoint_url + @tui.ansi_reset()
+    } else {
+      ""
+    }
+    sb.write_string(
+      "  " + icon + " " + @tui.ansi_bold() + s.slug + @tui.ansi_reset() +
+      label_part + "  " + @tui.ansi_dim() + "[" + @tui.ansi_reset() +
+      colored_status + @tui.ansi_dim() + "]" + @tui.ansi_reset() + url_part + "\n",
+    )
+  }
+  sb.to_string()
 }
 
 fn format_user_tokens(tokens : Array[@ai.UserToken]) -> String {

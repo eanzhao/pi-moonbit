@@ -122,4 +122,70 @@ test "build_nyxid_connect_api_key_body with optional label and gateway" {
 test "nyxid path builders" {
   assert_eq(nyxid_connect_api_key_path("openai"), "/api/v1/providers/openai/connect/api-key")
   assert_eq(nyxid_disconnect_path("abc-123"), "/api/v1/providers/abc-123/disconnect")
+  assert_eq(nyxid_user_service_proxy_path("ollama-xyz"), "/api/v1/proxy/s/ollama-xyz")
+}
+
+test "parse_nyxid_keys extracts user-registered services" {
+  let json = Json::object({
+    "keys": Json::array([
+      Json::object({
+        "id": Json::string("k-1"),
+        "slug": Json::string("ollama-from-macstudio-8p2r"),
+        "label": Json::string("Ollama from MacStudio"),
+        "endpoint_url": Json::string("http://localhost:11434/v1"),
+        "auth_method": Json::string("header"),
+        "status": Json::string("active"),
+        "is_active": Json::boolean(true),
+        "service_type": Json::string("http"),
+      }),
+      Json::object({
+        "id": Json::string("k-2"),
+        "slug": Json::string("lark-oauth"),
+        "label": Json::string("Lark"),
+        "endpoint_url": Json::string("https://open.larksuite.com"),
+        "auth_method": Json::string("token_exchange"),
+        "status": Json::string("active"),
+        "is_active": Json::boolean(true),
+        "service_type": Json::string("http"),
+        "catalog_service_slug": Json::string("lark"),
+        "catalog_service_name": Json::string("Lark"),
+      }),
+    ]),
+  })
+  match parse_nyxid_keys(json) {
+    Ok(services) => {
+      assert_eq(services.length(), 2)
+      assert_eq(services[0].slug, "ollama-from-macstudio-8p2r")
+      assert_eq(services[0].label, "Ollama from MacStudio")
+      assert_eq(services[0].endpoint_url, "http://localhost:11434/v1")
+      assert_eq(services[0].auth_method, "header")
+      assert_eq(services[0].active, true)
+      assert_true(services[0].catalog_service_slug is None)
+      assert_eq(services[1].auth_method, "token_exchange")
+      assert_eq(services[1].catalog_service_slug, Some("lark"))
+    }
+    Err(msg) => fail(msg)
+  }
+}
+
+test "parse_nyxid_keys skips malformed entries without erroring" {
+  let json = Json::object({
+    "keys": Json::array([
+      Json::object({
+        // missing slug
+        "id": Json::string("k-bad"),
+      }),
+      Json::object({
+        "id": Json::string("k-good"),
+        "slug": Json::string("good"),
+      }),
+    ]),
+  })
+  match parse_nyxid_keys(json) {
+    Ok(services) => {
+      assert_eq(services.length(), 1)
+      assert_eq(services[0].slug, "good")
+    }
+    Err(msg) => fail(msg)
+  }
 }

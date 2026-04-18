@@ -215,7 +215,7 @@ extern "js" fn host_post_form_ffi(url : String, form_body : String) -> Array[Str
   #|        let data = "";
   #|        res.on("data", (chunk) => { data += chunk; });
   #|        res.on("end", () => {
-  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|          process.stdout.write(JSON.stringify(["ok", String(res.statusCode), data]));
   #|        });
   #|        res.on("error", (e) => {
   #|          process.stdout.write(JSON.stringify(["err", e.message]));
@@ -315,7 +315,7 @@ extern "js" fn host_get_bearer_ffi(url : String, bearer : String) -> Array[Strin
   #|        let data = "";
   #|        res.on("data", (c) => { data += c; });
   #|        res.on("end", () => {
-  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|          process.stdout.write(JSON.stringify(["ok", String(res.statusCode), data]));
   #|        });
   #|        res.on("error", (e) => {
   #|          process.stdout.write(JSON.stringify(["err", e.message]));
@@ -396,7 +396,7 @@ extern "js" fn host_post_json_bearer_ffi(url : String, body : String, bearer : S
   #|        let data = "";
   #|        res.on("data", (c) => { data += c; });
   #|        res.on("end", () => {
-  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|          process.stdout.write(JSON.stringify(["ok", String(res.statusCode), data]));
   #|        });
   #|        res.on("error", (e) => {
   #|          process.stdout.write(JSON.stringify(["err", e.message]));
@@ -444,7 +444,7 @@ extern "js" fn host_delete_bearer_ffi(url : String, bearer : String) -> Array[St
   #|        let data = "";
   #|        res.on("data", (c) => { data += c; });
   #|        res.on("end", () => {
-  #|          process.stdout.write(JSON.stringify(["ok", res.statusCode, data]));
+  #|          process.stdout.write(JSON.stringify(["ok", String(res.statusCode), data]));
   #|        });
   #|        res.on("error", (e) => {
   #|          process.stdout.write(JSON.stringify(["err", e.message]));

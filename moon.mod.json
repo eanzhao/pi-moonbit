@@ -1,6 +1,6 @@
 {
   "name": "eanzhao/pi-moonbit",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "readme": "README.md",
   "license": "MIT",
   "keywords": ["ai", "agent", "llm", "coding-agent", "nyxid", "oauth", "cli"],

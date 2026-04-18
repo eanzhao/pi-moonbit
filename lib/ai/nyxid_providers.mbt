@@ -6,6 +6,9 @@ pub let nyxid_llm_status_path : String = "/api/v1/llm/status"
 ///| NyxID user-tokens 端点（列出已连接的 LLM provider）。
 pub let nyxid_my_tokens_path : String = "/api/v1/providers/my-tokens"
 
+///| NyxID unified keys 端点（用户注册的所有服务 — 内建 + 自定义）。
+pub let nyxid_keys_path : String = "/api/v1/keys"
+
 ///| 构造 connect-api-key 请求 URL。
 pub fn nyxid_connect_api_key_path(provider_slug : String) -> String {
   "/api/v1/providers/" + provider_slug + "/connect/api-key"
@@ -165,6 +168,117 @@ fn parse_user_token(json : Json) -> Result[UserToken, String] {
     last_used_at,
     connected_at,
   })
+}
+
+///| 用户注册的服务（来自 /api/v1/keys）—— 同时覆盖内建 provider 绑定和完全自定义
+/// 的 proxy service（Ollama / MLX / SiliconFlow / Mimo 等）。
+pub(all) struct NyxidUserService {
+  id : String
+  slug : String
+  label : String
+  endpoint_url : String
+  auth_method : String // bearer / header / token_exchange / none / path / api_key
+  status : String // active / expired / pending / revoked / error
+  active : Bool // is_active
+  service_type : String // http / ssh / ...
+  catalog_service_slug : String? // e.g. "llm-openai"; None 表示完全自定义
+  catalog_service_name : String? // 人类可读的 catalog 名
+  last_used_at : String?
+} derive(Show, Eq)
+
+///| 解析 `/api/v1/keys` 响应，返回 active HTTP 服务列表。
+///
+/// NyxID 文档称之为 "the unified keys API"：一次 round-trip 拿到 slug + label
+/// + 上游 URL + auth_method + 活跃度，比 `/providers/my-tokens` 覆盖面广得多
+/// —— 用户通过 `nyxid service add` 注册的自定义 proxy（如 Ollama、MLX、Mimo、
+/// SiliconFlow、chrono-llm）只会出现在这里。
+///
+/// 注意：结果里包含 `is_active=false` 的 revoked / pending 条目，调用方按需过滤。
+pub fn parse_nyxid_keys(json : Json) -> Result[Array[NyxidUserService], String] {
+  guard json is Object(obj) else {
+    return Err("expected JSON object in keys response")
+  }
+  let items = match obj.get("keys") {
+    Some(Array(items)) => items
+    _ => return Err("missing keys array")
+  }
+  let services : Array[NyxidUserService] = []
+  for item in items {
+    match parse_nyxid_key_item(item) {
+      Ok(svc) => services.push(svc)
+      Err(_) => () // skip malformed entries silently
+    }
+  }
+  Ok(services)
+}
+
+fn parse_nyxid_key_item(json : Json) -> Result[NyxidUserService, String] {
+  guard json is Object(obj) else {
+    return Err("expected key object")
+  }
+  let id = match obj.get("id") {
+    Some(String(s)) => s
+    _ => return Err("missing id")
+  }
+  let slug = match obj.get("slug") {
+    Some(String(s)) => s
+    _ => return Err("missing slug")
+  }
+  let label = match obj.get("label") {
+    Some(String(s)) => s
+    _ => slug
+  }
+  let endpoint_url = match obj.get("endpoint_url") {
+    Some(String(s)) => s
+    _ => ""
+  }
+  let auth_method = match obj.get("auth_method") {
+    Some(String(s)) => s
+    _ => "unknown"
+  }
+  let status = match obj.get("status") {
+    Some(String(s)) => s
+    _ => "unknown"
+  }
+  let active = match obj.get("is_active") {
+    Some(True) => true
+    Some(False) => false
+    _ => status == "active"
+  }
+  let service_type = match obj.get("service_type") {
+    Some(String(s)) => s
+    _ => "http"
+  }
+  let catalog_service_slug = match obj.get("catalog_service_slug") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+  let catalog_service_name = match obj.get("catalog_service_name") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+  let last_used_at = match obj.get("last_used_at") {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+  Ok({
+    id,
+    slug,
+    label,
+    endpoint_url,
+    auth_method,
+    status,
+    active,
+    service_type,
+    catalog_service_slug,
+    catalog_service_name,
+    last_used_at,
+  })
+}
+
+///| 从 `/api/v1/proxy/s/{slug}` 构造代理到该 user service 的完整 URL。
+pub fn nyxid_user_service_proxy_path(slug : String) -> String {
+  "/api/v1/proxy/s/" + slug
 }
 
 ///| 构造 POST /api/v1/providers/{id}/connect/api-key 请求体。
